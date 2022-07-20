@@ -4,6 +4,8 @@ using UnityEngine;
 using Unity.Jobs;
 using System.Linq;
 
+using Paz.Utility.Collections;
+
 namespace Paz.Utility.PathFinding
 {
     public class Node // : System.IComparable
@@ -61,7 +63,7 @@ namespace Paz.Utility.PathFinding
         // and I cba writing one :D
         // public SortedList<Node, float> OpenSet;
 
-        public HashSet<Node> OpenSet;
+        public ObservableHashSet<Node> OpenSet;
 
         public Node StartNode;
         public Node EndNode;
@@ -79,7 +81,7 @@ namespace Paz.Utility.PathFinding
 
             if(debug)
             {
-                visualiser = new Visualiser(AllNodes.Length);
+                visualiser = new Visualiser(this);
             }
             
 
@@ -94,7 +96,16 @@ namespace Paz.Utility.PathFinding
             StartNode.f = StartNode.g + StartNode.h;
 
             // Create the set of open nodes we're currently looking at
-            OpenSet = new HashSet<Node>();
+            OpenSet = new ObservableHashSet<Node>(); // HashSet<Node>();
+
+            // Register our visualiser which will recieve updates 
+            // when the collection is modified
+            if(visualiser != null)
+            {
+                OpenSet.Register(visualiser.ObservedSetModified);
+            }
+
+
             OpenSet.Add(StartNode);
 
             int loopCount = 0;
@@ -104,13 +115,16 @@ namespace Paz.Utility.PathFinding
             while(OpenSet.Count > 0 /* && loopCount++ < loopFailCount*/)
             {
                 Node CurrentNode = OpenSet.OrderBy(x => x.f).First();
+                visualiser?.EnqueueInstruction((CurrentNode.Coord, Color.red));
 
                 // If finished reconstruct the path
                 if(CurrentNode == EndNode)
                 {
+                    visualiser?.Playback();
+
                     Path = RebuildPath(CurrentNode);
                     ConstructWalls(Path, AllNodes, width, ref Walls);
-                    visualiser?.Update(CurrentNode, AllNodes, OpenSet, new Node[0]);
+                    // visualiser?.Update(CurrentNode, AllNodes, OpenSet, new Node[0]);
                     break;
                 }
 
@@ -141,7 +155,9 @@ namespace Paz.Utility.PathFinding
                     }
                 }
 
-                visualiser?.Update(CurrentNode, AllNodes, OpenSet, Neighbours);
+                visualiser?.EnqueueInstruction((CurrentNode.Coord, Color.white));
+
+                // visualiser?.Update(CurrentNode, AllNodes, OpenSet, Neighbours);
             }
 
             // Path-finding has failed and is impossible.
@@ -291,121 +307,10 @@ namespace Paz.Utility.PathFinding
 
             return Wall;
         }
-    }
 
-    public class Visualiser
-    {
-        private static GameObject displayPrefab;
-        private static GameObject displayObject;
-        Texture2D displayTexture;
-        Material materialToUpdate;
-
-        public Visualiser(int Nodes)
+        public Node CoordToNode(Vector2Int Coord)
         {
-            displayPrefab ??= Resources.Load("Prefabs/DisplaySearchPath") as GameObject;
-            displayObject ??= MonoBehaviour.Instantiate(displayPrefab);
-            materialToUpdate = displayObject.GetComponent<Renderer>().material;
-
-            displayObject.transform.position = Camera.main.transform.position + new Vector3(0.0f, -1.0f, 0.0f);
-            Camera.main.orthographic = true;
-        }
-
-        public void Update(Node CurrentNode, Node[] AllNodes, HashSet<Node> OpenSet, Node[] Neighbours)
-        {
-            int Size = (int)Mathf.Sqrt(AllNodes.Length);
-            
-            displayTexture = new Texture2D(Size, Size, TextureFormat.RGB24, 2, true);
-
-            for (int i = 0; i < AllNodes.Length; i++)
-            {
-                Node ThisNode = AllNodes[i];
-
-                Color PixelColour = Color.white;
-                if(ThisNode == CurrentNode)
-                {
-                    PixelColour = Color.red;
-                }
-                else if(Neighbours.Contains(ThisNode))
-                {
-                    PixelColour = Color.green;
-                }
-                else if(OpenSet.Contains(ThisNode))
-                {
-                    PixelColour = Color.blue;
-                }
-                else if(ThisNode.isBlocker)
-                {
-                    PixelColour = Color.black;
-                }
-
-                displayTexture.SetPixel(Size - 1 - i % Size, i / Size, PixelColour);
-            }
-
-
-            displayTexture.anisoLevel = 0;
-            displayTexture.filterMode = 0;
-
-            displayTexture.Apply(true, true);
-
-
-            materialToUpdate.mainTexture = displayTexture;
+            return AllNodes[Coord.x + Coord.y * width];
         }
     }
-
-    public static class GridLayouts
-    {
-        public static class RandomBlockers
-        {
-            public static Node[] GenerateGrid(int GridWidth, uint Seed = 0)
-            {
-                int Width = GridWidth;
-                int Size = Width*Width;
-
-                Node[] AllNodes = new Node[Size];
-
-                Unity.Mathematics.Random Randy = new Unity.Mathematics.Random();
-
-                Seed = Seed == 0u ? (uint)new System.Random().Next() : Seed;
-                Randy.InitState(Seed);
-
-                Debug.Log($"Seed: {Randy.state}");
-
-                for (int i = 0; i < Size; i++)
-                {
-                    AllNodes[i] = new Node(new Vector2Int(i % Width, i / Width));
-                    AllNodes[i].isBlocker = Randy.NextInt(0, 4) == 0;
-                }
-
-                int StartIndex = 0; // UnityEngine.Random.Range(0, Pather.AllNodes.Length);
-                int EndIndex = AllNodes.Length - 1; // UnityEngine.Random.Range(0, Pather.AllNodes.Length);
-
-                AllNodes[StartIndex].isBlocker = false;
-                AllNodes[EndIndex].isBlocker = false;
-
-                return AllNodes;
-            }
-        }
-
-
-        public static class Ring
-        {
-            public static Node[] GenerateGrid()
-            {
-                Node[] Return = new Node[16];
-                for (int i = 0; i < Return.Length; i++)
-                {
-                    Return[i] = new Node(new Vector2Int(i % 4, i / 4));
-                }
-
-                Return[1].isBlocker = true;
-                Return[5].isBlocker = true;
-                Return[9].isBlocker = true;
-                Return[10].isBlocker = true;
-
-                return Return;
-            }
-        }
-    }
-
-    
 }
