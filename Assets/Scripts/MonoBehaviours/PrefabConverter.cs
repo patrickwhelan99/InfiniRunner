@@ -3,23 +3,26 @@ using System.Collections.Generic;
 using UnityEngine;
 using Unity.Entities;
 
-public static class PrefabConverter
+public class PrefabConverter
 {
-    private static BlobAssetStore BlobStore;
-    private static GameObjectConversionSettings Settings;
+    private BlobAssetStore BlobStore;
+    private GameObjectConversionSettings Settings;
+
+    public static PrefabConverter _instance;
+    public static PrefabConverter instance => _instance == null ? _instance = new PrefabConverter() : _instance;
 
     public static Entity Convert(GameObject Obj)
     {
-        BlobStore ??= new BlobAssetStore();
-        Settings ??= GameObjectConversionSettings.FromWorld(World.DefaultGameObjectInjectionWorld, BlobStore);
+        instance.BlobStore ??= new BlobAssetStore();
+        instance.Settings ??= GameObjectConversionSettings.FromWorld(World.DefaultGameObjectInjectionWorld, instance.BlobStore);
 
-        Entity E = GameObjectConversionUtility.ConvertGameObjectHierarchy(Obj, Settings);
+        Entity E = GameObjectConversionUtility.ConvertGameObjectHierarchy(Obj, instance.Settings);
 
         return E;
     }
 
     public static void Dispose()
     {
-        BlobStore.Dispose();
+        instance.BlobStore.Dispose();
     }
 }

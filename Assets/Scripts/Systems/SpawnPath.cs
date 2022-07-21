@@ -17,7 +17,6 @@ public partial class SpawnPath : SystemBase
     static readonly int REAL_WORLD_SCALE = 20;
 
     NativeArray<Entity> LevelPrefabs;
-    NativeArray<Vector2Int> PathPositions;
 
     protected override void OnStartRunning()
     {
@@ -51,7 +50,7 @@ public partial class SpawnPath : SystemBase
 
 
         // Job #1 Spawn prefabs for each path tile
-        PathPositions = new NativeArray<Vector2Int>(Path.Select(x => x.Coord * REAL_WORLD_SCALE).ToArray(), Allocator.TempJob);
+        NativeArray<Vector2Int> PathPositions = new NativeArray<Vector2Int>(Path.Select(x => x.Coord * REAL_WORLD_SCALE).ToArray(), Allocator.Persistent);
 
         SpawnPathSegments SpawnSegmentsJob = new SpawnPathSegments()
         {
@@ -61,6 +60,11 @@ public partial class SpawnPath : SystemBase
         };
 
         Dependency = SpawnSegmentsJob.Schedule(Path.Length, 8);
+
+        Dependency = Entities.WithAll<PlayerTag>().ForEach((ref Translation Trans) =>
+        {
+            Trans.Value = new float3(PathPositions[0].x, 3.0f, PathPositions[0].y * -1);
+        }).Schedule(Dependency);
 
 
         Dependency.Complete();
@@ -75,11 +79,6 @@ public partial class SpawnPath : SystemBase
 
     protected override void OnStopRunning()
     {
-        if(PathPositions.IsCreated)
-        {
-            PathPositions.Dispose();
-        }
-
         if(LevelPrefabs.IsCreated)
         {
             LevelPrefabs.Dispose();

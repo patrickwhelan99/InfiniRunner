@@ -5,7 +5,7 @@ using Unity.Entities;
 
 public class GameController : Singleton<GameController>
 {
-    
+    PrefabConverter prefabConverter = new PrefabConverter();
 
     void OnDestroy()
     {

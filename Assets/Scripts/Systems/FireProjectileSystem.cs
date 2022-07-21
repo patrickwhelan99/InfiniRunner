@@ -31,76 +31,76 @@ public partial class FireProjectileSystem : SystemBase
 
     protected override void OnCreate()
     {
-        events = new NativeStream(Unity.Jobs.LowLevel.Unsafe.JobsUtility.JobWorkerCount, Allocator.Persistent);
-        streamWriter = events.AsWriter();
-        for (int i = 0; i < events.AsWriter().ForEachCount; i++)
-        {
-            streamWriter.BeginForEachIndex(i);
-        }
+        //events = new NativeStream(Unity.Jobs.LowLevel.Unsafe.JobsUtility.JobWorkerCount, Allocator.Persistent);
+        //streamWriter = events.AsWriter();
+        //for (int i = 0; i < events.AsWriter().ForEachCount; i++)
+        //{
+        //    streamWriter.BeginForEachIndex(i);
+        //}
 
-        streamWriter.EndForEachIndex();
+        //streamWriter.EndForEachIndex();
     }
 
     protected override void OnUpdate()
     {
-        streamWriter.EndForEachIndex();
-        EventsArray = events.ToNativeArray<FireProjectileEvent>(Allocator.TempJob);
+        //streamWriter.EndForEachIndex();
+        //EventsArray = events.ToNativeArray<FireProjectileEvent>(Allocator.TempJob);
 
-        Dependency = new ProcessEvents()
-        {
-            Ecb = ecbs.CreateCommandBuffer().AsParallelWriter(),
-            Events = EventsArray
-        }.Schedule(EventsArray.Length, 1);
+        //Dependency = new ProcessEvents()
+        //{
+        //    Ecb = ecbs.CreateCommandBuffer().AsParallelWriter(),
+        //    Events = EventsArray
+        //}.Schedule(EventsArray.Length, 1);
 
-        Dependency.Complete();
+        //Dependency.Complete();
 
-        EventsArray.Dispose();
-        events.Dispose();
-        events = new NativeStream(Unity.Jobs.LowLevel.Unsafe.JobsUtility.MaxJobThreadCount, Allocator.Persistent);
-        streamWriter = events.AsWriter();
-        for (int i = 0; i < events.AsWriter().ForEachCount; i++)
-        {
-            streamWriter.BeginForEachIndex(i);
-        }
+        //EventsArray.Dispose();
+        //events.Dispose();
+        //events = new NativeStream(Unity.Jobs.LowLevel.Unsafe.JobsUtility.MaxJobThreadCount, Allocator.Persistent);
+        //streamWriter = events.AsWriter();
+        //for (int i = 0; i < events.AsWriter().ForEachCount; i++)
+        //{
+        //    streamWriter.BeginForEachIndex(i);
+        //}
     }
 
     protected override void OnDestroy()
     {
-        events.Dispose();
+        //events.Dispose();
 
-        if(EventsArray != null && EventsArray.IsCreated)
-        {
-            EventsArray.Dispose();
-        }
+        //if(EventsArray != null && EventsArray.IsCreated)
+        //{
+        //    EventsArray.Dispose();
+        //}
     }
 
-    public partial struct ProcessEvents : IJobParallelFor
-    {
-        public EntityCommandBuffer.ParallelWriter Ecb;
-        [ReadOnly] public NativeArray<FireProjectileEvent> Events;
-        public void Execute(int index)
-        {
-            FireProjectileEvent Event = Events[index];
+    //public partial struct ProcessEvents : IJobParallelFor
+    //{
+    //    public EntityCommandBuffer.ParallelWriter Ecb;
+    //    [ReadOnly] public NativeArray<FireProjectileEvent> Events;
+    //    public void Execute(int index)
+    //    {
+    //        FireProjectileEvent Event = Events[index];
 
-            Entity FiredProjectile = Ecb.Instantiate(index, Event.Projectile);
+    //        Entity FiredProjectile = Ecb.Instantiate(index, Event.Projectile);
 
-            Rotation ProjectileRotation = new Rotation()
-            {
-                Value = Event.TransformMatrix.Rotation * Quaternion.Euler(90.0f, 0.0f, 0.0f)
-            };
-            Ecb.SetComponent<Rotation>(index, FiredProjectile, ProjectileRotation);
+    //        Rotation ProjectileRotation = new Rotation()
+    //        {
+    //            Value = Event.TransformMatrix.Rotation * Quaternion.Euler(90.0f, 0.0f, 0.0f)
+    //        };
+    //        Ecb.SetComponent<Rotation>(index, FiredProjectile, ProjectileRotation);
 
-            Translation ProjectileTranslation = new Translation()
-            {
-                Value = Event.TransformMatrix.Position + Event.TransformMatrix.Forward * 2.0f
-            };
-            Ecb.SetComponent<Translation>(index, FiredProjectile, ProjectileTranslation);
-        }
-    }
+    //        Translation ProjectileTranslation = new Translation()
+    //        {
+    //            Value = Event.TransformMatrix.Position + Event.TransformMatrix.Forward * 2.0f
+    //        };
+    //        Ecb.SetComponent<Translation>(index, FiredProjectile, ProjectileTranslation);
+    //    }
+    //}
 
     public static void FireProjectile(Entity Projectile, LocalToWorld TransformMatrix, int ThreadIndex)
     {
-        FireProjectileEvent NewEvent = new FireProjectileEvent(Projectile, TransformMatrix);
-        streamWriter.Write(NewEvent);
+        //FireProjectileEvent NewEvent = new FireProjectileEvent(Projectile, TransformMatrix);
+        //streamWriter.Write(NewEvent);
     }
 }

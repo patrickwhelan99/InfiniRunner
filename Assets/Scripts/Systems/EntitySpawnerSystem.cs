@@ -41,7 +41,7 @@ public partial class EntitySpawner : SystemBase
     {
         if(enemyPrefab == default)
         {
-            PrefabConverter.Convert(UnityEngine.Resources.Load<UnityEngine.GameObject>(""));
+            // PrefabConverter.Convert(UnityEngine.Resources.Load<UnityEngine.GameObject>("Prefabs/Capsule"));
             return;
         }
 
