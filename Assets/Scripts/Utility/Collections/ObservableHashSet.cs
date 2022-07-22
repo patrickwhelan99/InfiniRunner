@@ -44,7 +44,7 @@ namespace Paz.Utility.Collections
                     collection = this,
                     added = ToAdd
                 };
-                collectionModified.Invoke(EventData);
+                collectionModified?.Invoke(EventData);
             }
         }
 
@@ -57,7 +57,7 @@ namespace Paz.Utility.Collections
                     collection = this,
                     removed = ToRemove
                 };
-                collectionModified.Invoke(EventData);
+                collectionModified?.Invoke(EventData);
             }
         }
     }

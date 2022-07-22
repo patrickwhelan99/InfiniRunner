@@ -4,14 +4,22 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 
-public class HelloWorldTest
-{
+public class HelloWorldTest : ECSTestsFixture
+{ 
+    [SetUp]
+    public override void Setup()
+    {
+        // CreateDefaultWorld = true;
+        base.Setup();
+    }
+
     // A Test behaves as an ordinary method
     [Test]
     public void HelloWorldTestSimplePasses()
     {
+        
         // Use the Assert class to test conditions
-        Assert.True(true);
+        Assert.IsNotNull(base.m_Manager.World.GetExistingSystem(typeof(ArrowSystem)));
     }
 
     // A UnityTest behaves like a coroutine in Play Mode. In Edit Mode you can use

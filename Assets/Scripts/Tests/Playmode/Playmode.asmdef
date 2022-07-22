@@ -4,7 +4,12 @@
     "references": [
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
-        "Main"
+        "Main",
+        "Unity.Entities",
+        "Unity.Jobs",
+        "Unity.Burst",
+        "",
+        "Unity.Entities.Tests"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
