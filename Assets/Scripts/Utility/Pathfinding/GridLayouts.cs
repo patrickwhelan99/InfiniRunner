@@ -8,7 +8,7 @@ namespace Paz.Utility.PathFinding
     {
         public static class RandomBlockers
         {
-            public static Node[] GenerateGrid(int GridWidth, uint Seed = 0)
+            public static Node[] GenerateGrid(int GridWidth, uint Seed = 0u)
             {
                 int Width = GridWidth;
                 int Size = Width*Width;
@@ -20,7 +20,7 @@ namespace Paz.Utility.PathFinding
                 Seed = Seed == 0u ? (uint)new System.Random().Next() : Seed;
                 Randy.InitState(Seed);
 
-                Debug.Log($"Seed: {Randy.state}");
+                Debug.Log($"Seed: {Seed}");
 
                 for (int i = 0; i < Size; i++)
                 {

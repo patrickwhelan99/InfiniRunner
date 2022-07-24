@@ -5,14 +5,17 @@ using UnityEngine;
 namespace Paz.Utility.Collections
 {
     // Event Data
+    public enum CollectionModifiedEventEnum {ADDED, REMOVED, REPLACED}
     public struct CollectionModifiedEventData<T>
     {
+        public CollectionModifiedEventEnum operation;
         public IEnumerable<T> collection;
         public T removed;
         public T added;
 
-        public CollectionModifiedEventData(IEnumerable<T> C, T R, T A)
+        public CollectionModifiedEventData(CollectionModifiedEventEnum O, IEnumerable<T> C, T R, T A)
         {
+            operation = O;
             collection = C;
             removed = R;
             added = A;
@@ -39,11 +42,8 @@ namespace Paz.Utility.Collections
         {
             if(base.Add(ToAdd))
             {
-                CollectionModifiedEventData<T> EventData = new CollectionModifiedEventData<T>()
-                {
-                    collection = this,
-                    added = ToAdd
-                };
+                CollectionModifiedEventData<T> EventData = new CollectionModifiedEventData<T>(CollectionModifiedEventEnum.ADDED, this, default, ToAdd);
+
                 collectionModified?.Invoke(EventData);
             }
         }
@@ -52,11 +52,7 @@ namespace Paz.Utility.Collections
         {
             if (base.Remove(ToRemove))
             {
-                CollectionModifiedEventData<T> EventData = new CollectionModifiedEventData<T>()
-                {
-                    collection = this,
-                    removed = ToRemove
-                };
+                CollectionModifiedEventData<T> EventData = new CollectionModifiedEventData<T>(CollectionModifiedEventEnum.REMOVED, this, ToRemove, default);
                 collectionModified?.Invoke(EventData);
             }
         }

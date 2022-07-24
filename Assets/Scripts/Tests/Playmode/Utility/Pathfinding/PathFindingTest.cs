@@ -7,14 +7,17 @@ using UnityEngine.TestTools;
 using Paz.Utility.PathFinding;
 using System.Linq;
 
-public class TestPathfinding : ECSTestsFixture
+public class PathFindingTest
 {
+    readonly static uint GOOD_SEED = 2u;
+
     // A Test behaves as an ordinary method
     [Test]
-    public void TestPathfindingSimplePasses()
+    public void AStar()
     {
         // Generate a grid of 64x64 with random tiles blocked
-        Node[] AllNodes = GridLayouts.RandomBlockers.GenerateGrid(64);
+        // Using a seed that we know produces a completable maze
+        Node[] AllNodes = GridLayouts.RandomBlockers.GenerateGrid(64, GOOD_SEED);
 
         // Create our path finder
         AStar PathFinder = new AStar()
@@ -27,6 +30,7 @@ public class TestPathfinding : ECSTestsFixture
         };
 
         // Assert that a path has been found
-        Assert.True(PathFinder.Execute(out _).Count() > 0);
+        IEnumerable<Node> Path = PathFinder.Execute(out _);
+        Assert.That(Path.Count() > 0);
     }
 }

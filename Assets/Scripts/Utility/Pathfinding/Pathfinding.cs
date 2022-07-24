@@ -86,8 +86,8 @@ namespace Paz.Utility.PathFinding
             
 
             // Grid dimensions
-            width = AllNodes[AllNodes.Length -1].Coord.x + 1;
-            height = AllNodes[AllNodes.Length -1].Coord.y + 1;
+            width = AllNodes[AllNodes.Length - 1].Coord.x + 1;
+            height = AllNodes[AllNodes.Length - 1].Coord.y + 1;
 
 
             // Set starting node's values
