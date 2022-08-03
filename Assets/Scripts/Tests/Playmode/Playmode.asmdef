@@ -8,7 +8,9 @@
         "Unity.Entities",
         "Unity.Jobs",
         "Unity.Burst",
-        "Unity.Entities.Tests"
+        "Unity.Entities.Tests",
+        "Unity.Mathematics",
+        "Unity.Transforms"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
