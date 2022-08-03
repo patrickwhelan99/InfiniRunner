@@ -5,53 +5,60 @@ using Unity.Transforms;
 using Unity.Mathematics;
 using Unity.Physics;
 using Unity.Collections;
+using System.Linq;
 
-[AlwaysUpdateSystem]
+// [AlwaysUpdateSystem]
+[UpdateInGroup(typeof(LateSimulationSystemGroup))]
+[UpdateBefore(typeof(DestroyEntitySystem))]
 public partial class EntitySpawner : SystemBase
 {
     EntityCommandBufferSystem ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
     EntityCommandBuffer ecb;
 
     Entity enemyPrefab;
+    EntityQuery levelTilePieces;
 
     const int TO_SPAWN = 25;
 
-    bool hasSpawned = false;
-
-
-    public void Spawn()
+    protected override void OnCreate()
     {
-        SpawnJob SpawnDudes = new SpawnJob()
-        {
-            ParallelWriter = ecbs.CreateCommandBuffer().AsParallelWriter(),
-            EntityPrefab = enemyPrefab,
-            Randoms = RandomSystem.random
-        };
+        RequireSingletonForUpdate<SpawnEnemiesTag>();
+        levelTilePieces = EntityManager.CreateEntityQuery(typeof(LevelTileTag), typeof(Translation));
+        RequireForUpdate(levelTilePieces);
 
-        Dependency = SpawnDudes.Schedule(TO_SPAWN, 1, Dependency);
-
-        
-        ecbs.AddJobHandleForProducer(Dependency);
-        Dependency.Complete();
-
-        hasSpawned = true;
+        EntityManager.CreateEntity(typeof(SpawnEnemiesTag));
     }
 
     protected override void OnUpdate()
     {
-        if(enemyPrefab == default)
-        {
-            // PrefabConverter.Convert(UnityEngine.Resources.Load<UnityEngine.GameObject>("Prefabs/Capsule"));
-            return;
-        }
+        enemyPrefab = PrefabConverter.Convert((UnityEngine.GameObject)UnityEngine.Resources.Load("Prefabs/Capsule"));
+        NativeArray<Translation> Ts = levelTilePieces.ToComponentDataArray<Translation>(Allocator.Temp);
+        float3[] Translations = Ts.Select(x => x.Value).OrderBy(x => x.Distance(float3.zero)).ToArray();
+        float3 SpawnTilePosition = Translations.ElementAt(10);
 
-        if(!hasSpawned)
+        Ts.Dispose();
+
+
+        SpawnJob SpawnDudes = new SpawnJob()
         {
-            Spawn();
-        }
+            ParallelWriter = ecbs.CreateCommandBuffer().AsParallelWriter(),
+            EntityPrefab = enemyPrefab,
+            Randoms = RandomSystem.random,
+
+            SpawnPos = SpawnTilePosition + new float3(0.0f, 5.0f, 0.0f)
+        };
+
+        Dependency = SpawnDudes.Schedule(TO_SPAWN, 1, Dependency);
+
+        EntityManager.AddComponent(GetSingletonEntity<SpawnEnemiesTag>(), typeof(DestroyEntityTag));
+
+        
+        ecbs.AddJobHandleForProducer(Dependency);
+        Dependency.Complete();
     }
 
-    [BurstCompile]
+
+    // [BurstCompile]
     struct SpawnJob : IJobParallelFor
     {
         public EntityCommandBuffer.ParallelWriter ParallelWriter;
@@ -60,20 +67,29 @@ public partial class EntitySpawner : SystemBase
         public float3 CircleCentre;
         public float Radius;
 
+        public float3 SpawnPos;
+
         [NativeDisableParallelForRestriction]
         public NativeArray<Unity.Mathematics.Random> Randoms; 
 
         [Unity.Collections.LowLevel.Unsafe.NativeSetThreadIndex]
         int threadIndex;
 
-        [BurstCompile]
+        // [BurstCompile]
         public void Execute(int index)
         {
             Unity.Mathematics.Random Rand = Randoms[threadIndex];
 
             Entity SpawnedEntity = ParallelWriter.Instantiate(index, EntityPrefab);
 
-            SpawnDudesCallback(ParallelWriter, SpawnedEntity, index);
+
+            ParallelWriter.SetComponent<Translation>(index, SpawnedEntity, new Translation() 
+            {
+                Value = SpawnPos + Rand.NextFloat3(5)
+            });
+
+
+            // SpawnDudesCallback(ParallelWriter, SpawnedEntity, index);
 
 
             Randoms[threadIndex] = Rand;
@@ -105,7 +121,6 @@ public partial class EntitySpawner : SystemBase
         float Spacing = 1.1f;
         return Origin + new float3(-(Index / Length * Spacing), 0.0f, Index % Length * Spacing);
     }
-
 
     private partial struct SetPathingTargetJob : IJobEntity
     {
