@@ -33,7 +33,7 @@ public partial class PlayerMovementSystem : SystemBase
 
     protected override void OnCreate()
     {
-
+        projectilePrefab = PrefabConverter.Convert((GameObject)Resources.Load("Prefabs/Projectile"));
     }
 
     protected override void OnUpdate()
@@ -74,7 +74,6 @@ public partial class PlayerMovementSystem : SystemBase
 
             if(Input.GetMouseButton(0) && CurrentTime - timeOfLastFireEvent > FIRING_COOLDOWN_TIME)
             {
-                // FireProjectile(Ecb, Rot, TransformMatrix);
                 FireProjectileSystem.FireProjectile(projectilePrefab, TransformMatrix, 0);
                 timeOfLastFireEvent = CurrentTime;
             }
@@ -82,29 +81,4 @@ public partial class PlayerMovementSystem : SystemBase
             TrackCameraToPlayer.PlayerPosition = Trans.Value;
         }).Run();
     }
-
-
-    // void FireProjectile(EntityCommandBuffer Ecb, Rotation Rot, LocalToWorld TransformMatrix)
-    // {
-    //     if(!EntityManager.Exists(PrefabConverter.projectile))
-    //     {
-    //         return;
-    //     }
-
-    //     Entity FiredProjectile = Ecb.Instantiate(PrefabConverter.projectile);
-
-    //     Rotation ProjectileRotation = new Rotation()
-    //     {
-    //         Value = Rot.Value * Quaternion.Euler(90.0f, 0.0f, 0.0f)
-    //     };
-    //     Ecb.SetComponent<Rotation>(FiredProjectile, ProjectileRotation);
-
-    //     Translation ProjectileTranslation = new Translation()
-    //     {
-    //         Value = TransformMatrix.Position + TransformMatrix.Forward * 2.0f
-    //     };
-    //     Ecb.SetComponent<Translation>(FiredProjectile, ProjectileTranslation);
-
-    //     timeOfLastFireEvent = CurrentTime;
-    // }
 }
