@@ -8,8 +8,7 @@ using Unity.Collections;
 using System.Linq;
 
 // [AlwaysUpdateSystem]
-[UpdateInGroup(typeof(LateSimulationSystemGroup))]
-[UpdateBefore(typeof(DestroyEntitySystem))]
+[UpdateInGroup(typeof(VariableSystemGroupThreeSeconds))]
 public partial class EntitySpawner : SystemBase
 {
     EntityCommandBufferSystem ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
@@ -18,23 +17,32 @@ public partial class EntitySpawner : SystemBase
     Entity enemyPrefab;
     EntityQuery levelTilePieces;
 
-    const int TO_SPAWN = 25;
+    const int TO_SPAWN = 3;
+
+    double lastSpawnTime;
 
     protected override void OnCreate()
     {
-        RequireSingletonForUpdate<SpawnEnemiesTag>();
         levelTilePieces = EntityManager.CreateEntityQuery(typeof(LevelTileTag), typeof(Translation));
         RequireForUpdate(levelTilePieces);
 
-        EntityManager.CreateEntity(typeof(SpawnEnemiesTag));
+        enemyPrefab = PrefabConverter.Convert((UnityEngine.GameObject)UnityEngine.Resources.Load("Prefabs/Capsule"));
     }
 
     protected override void OnUpdate()
     {
-        enemyPrefab = PrefabConverter.Convert((UnityEngine.GameObject)UnityEngine.Resources.Load("Prefabs/Capsule"));
+        if(!TryGetSingleton(out PlayerTag _))
+        {
+            return;
+        }
+
+
+        float3 PlayerPos = EntityManager.GetComponentData<Translation>(GetSingletonEntity<PlayerTag>()).Value;
+
+
         NativeArray<Translation> Ts = levelTilePieces.ToComponentDataArray<Translation>(Allocator.Temp);
-        float3[] Translations = Ts.Select(x => x.Value).OrderBy(x => x.Distance(float3.zero)).ToArray();
-        float3 SpawnTilePosition = Translations.Last();
+        float3[] Translations = Ts.Select(x => x.Value).OrderBy(x => x.Distance(PlayerPos)).ToArray();
+        float3 SpawnTilePosition = Translations.Skip(1).Take(2).ChooseRandom();
 
         Ts.Dispose();
 
@@ -49,9 +57,6 @@ public partial class EntitySpawner : SystemBase
         };
 
         Dependency = SpawnDudes.Schedule(TO_SPAWN, 1, Dependency);
-
-        EntityManager.AddComponent(GetSingletonEntity<SpawnEnemiesTag>(), typeof(DestroyEntityTag));
-
         
         ecbs.AddJobHandleForProducer(Dependency);
         Dependency.Complete();
