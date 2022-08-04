@@ -38,7 +38,7 @@ public partial class SpawnPath : SystemBase
             AStar PathFinder = new AStar()
             {
                 AllNodes = AllNodes,
-                debug = true,
+                debug = false,
 
                 StartNode = AllNodes[0],
                 EndNode = AllNodes[AllNodes.Length - 1]
