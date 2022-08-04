@@ -15,9 +15,9 @@ public partial class PlayerMovementSystem : SystemBase
 
     Entity projectilePrefab;
 
-    const float PLAYER_SPEED = 0.5f;
-    const float MAX_PLAYER_SPEED = 3.0f;
-    const float FIRING_COOLDOWN_TIME = 0.1f;
+    const float PLAYER_SPEED = 1.0f;
+    const float MAX_PLAYER_SPEED = 15.0f;
+    const float FIRING_COOLDOWN_TIME = 0.5f;
 
     double timeOfLastFireEvent;
     double CurrentTime;

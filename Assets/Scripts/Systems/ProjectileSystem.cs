@@ -12,8 +12,8 @@ using Unity.Physics.Systems;
 public partial class ProjectileSystem : SystemBase
 {
     // Physics stuff
-    StepPhysicsWorld stepPhysicsWorld => World.GetOrCreateSystem<StepPhysicsWorld>();
-    BuildPhysicsWorld buildPhysicsWorld => World.GetOrCreateSystem<BuildPhysicsWorld>();
+    StepPhysicsWorld stepPhysicsWorld => World.GetExistingSystem<StepPhysicsWorld>();
+    BuildPhysicsWorld buildPhysicsWorld => World.GetExistingSystem<BuildPhysicsWorld>();
     EntityCommandBufferSystem ecbs => World.GetOrCreateSystem<EndSimulationEntityCommandBufferSystem>();
 
     EntityQuery ActiveProjectilesQuery;
@@ -38,18 +38,16 @@ public partial class ProjectileSystem : SystemBase
 
     protected override void OnStartRunning()
     {
-        buildPhysicsWorld.RegisterPhysicsRuntimeSystemReadOnly();
+        this.RegisterPhysicsRuntimeSystemReadWrite();
     }
 
     
     protected override void OnUpdate()
     {
-        CullProjectilesJob CullingJob = new CullProjectilesJob()
+        Dependency = Entities.WithAll<ProjectileTag>().WithNone<DestroyEntityTag>().ForEach((ref Translation Trans, in LocalToWorld Ltw) =>
         {
-            writer = ecbs.CreateCommandBuffer().AsParallelWriter()
-        };
-        Dependency = CullingJob.ScheduleParallel(ActiveProjectilesQuery);
-
+            Trans.Value += Ltw.Up * PROJECTILE_SPEED;
+        }).ScheduleParallel(Dependency);
 
         CollisionEventJob CollisionJob = new CollisionEventJob()
         {
@@ -60,26 +58,7 @@ public partial class ProjectileSystem : SystemBase
         };
         Dependency = CollisionJob.Schedule(stepPhysicsWorld.Simulation, Dependency);
 
-
-        ecbs.AddJobHandleForProducer(Dependency);
-
         Dependency.Complete();
-    }
-
-
-    partial struct CullProjectilesJob : IJobEntity
-    {
-        public EntityCommandBuffer.ParallelWriter writer;
-
-        public void Execute(Entity Ent, ref Translation Trans, in LocalToWorld Ltw)
-        {
-            if(Trans.Value.x > PROJECTILE_CULL_DISTANCE || Trans.Value.z > PROJECTILE_CULL_DISTANCE || Trans.Value.x < -PROJECTILE_CULL_DISTANCE || Trans.Value.z < -PROJECTILE_CULL_DISTANCE)
-            {
-                writer.AddComponent<DestroyEntityTag>(0, Ent);
-            }
-
-            Trans.Value += Ltw.Up * PROJECTILE_SPEED;
-        }
     }
 
 

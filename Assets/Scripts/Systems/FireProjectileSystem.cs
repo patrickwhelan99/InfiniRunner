@@ -39,7 +39,8 @@ public partial class FireProjectileSystem : SystemBase
             Dependency = new ProcessEvents()
             {
                 Ecb = ecbs.CreateCommandBuffer().AsParallelWriter(),
-                Events = EventsArray
+                Events = EventsArray,
+                Time = (float)Time.ElapsedTime
             }.Schedule(EventsArray.Length, 1);
 
             Dependency.Complete();
@@ -66,6 +67,7 @@ public partial class FireProjectileSystem : SystemBase
     {
        public EntityCommandBuffer.ParallelWriter Ecb;
        [ReadOnly] public NativeArray<FireProjectileEvent> Events;
+       public float Time;
        public void Execute(int index)
        {
            FireProjectileEvent Event = Events[index];
@@ -83,6 +85,12 @@ public partial class FireProjectileSystem : SystemBase
                Value = Event.TransformMatrix.Position + Event.TransformMatrix.Forward * 2.0f
            };
            Ecb.SetComponent<Translation>(index, FiredProjectile, ProjectileTranslation);
+
+           Ecb.AddComponent(index, FiredProjectile, new DestroyEntityAfterTime()
+           {
+               TimeCreated = Time,
+               TimeToDestroy = Time + 3.0f
+           });
        }
     }
 

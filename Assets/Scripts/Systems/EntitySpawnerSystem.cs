@@ -34,7 +34,7 @@ public partial class EntitySpawner : SystemBase
         enemyPrefab = PrefabConverter.Convert((UnityEngine.GameObject)UnityEngine.Resources.Load("Prefabs/Capsule"));
         NativeArray<Translation> Ts = levelTilePieces.ToComponentDataArray<Translation>(Allocator.Temp);
         float3[] Translations = Ts.Select(x => x.Value).OrderBy(x => x.Distance(float3.zero)).ToArray();
-        float3 SpawnTilePosition = Translations.ElementAt(10);
+        float3 SpawnTilePosition = Translations.Last();
 
         Ts.Dispose();
 

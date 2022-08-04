@@ -17,12 +17,14 @@ public partial class ArrowCollisionSystem : SystemBase
     public BuildPhysicsWorld buildPhysicsWorld;
     public StepPhysicsWorld stepPhysicsWorld;
 
-    protected override void OnCreate()
+    protected override void OnStartRunning()
     {
-        buildPhysicsWorld = World.GetOrCreateSystem<BuildPhysicsWorld>();
-        stepPhysicsWorld = World.GetOrCreateSystem<StepPhysicsWorld>();
-
         instance = this;
+
+        buildPhysicsWorld = World.GetExistingSystem<BuildPhysicsWorld>();
+        stepPhysicsWorld = World.GetExistingSystem<StepPhysicsWorld>();
+
+        this.RegisterPhysicsRuntimeSystemReadWrite();
     }
 
 
@@ -35,6 +37,8 @@ public partial class ArrowCollisionSystem : SystemBase
             Type1s = GetComponentDataFromEntity<ArrowTag>(),
             Type2s = GetComponentDataFromEntity<EnemyTag>()
         }.Schedule(stepPhysicsWorld.Simulation, Dependency);
+
+        Dependency.Complete();
     }
 
 
