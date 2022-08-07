@@ -46,7 +46,7 @@ public class TestPathfinding : MonoBehaviour
             Pather.EndNode.isBlocker = false;
 
         
-            yield return Pather.Execute(out _);
+            yield return Pather.Execute();
             yield return new WaitForSeconds(3.0f);
         }
     }

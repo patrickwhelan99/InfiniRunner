@@ -15,9 +15,11 @@ public class PathFindingTest
     [Test]
     public void AStar()
     {
+        Unity.Mathematics.Random Rand = new Unity.Mathematics.Random(GOOD_SEED);
+
         // Generate a grid of 64x64 with random tiles blocked
         // Using a seed that we know produces a completable maze
-        Node[] AllNodes = GridLayouts.RandomBlockers.GenerateGrid(64, GOOD_SEED);
+        Node[] AllNodes = GridLayouts.RandomBlockers.GenerateGrid(64, Rand);
 
         // Create our path finder
         AStar PathFinder = new AStar()
@@ -30,7 +32,7 @@ public class PathFindingTest
         };
 
         // Assert that a path has been found
-        IEnumerable<Node> Path = PathFinder.Execute(out _);
+        IEnumerable<Node> Path = PathFinder.Execute();
         Assert.That(Path.Count() > 0);
     }
 }

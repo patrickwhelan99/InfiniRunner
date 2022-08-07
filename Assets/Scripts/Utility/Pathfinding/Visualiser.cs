@@ -9,17 +9,20 @@ namespace Paz.Utility.PathFinding
 {
     public class Visualiser
     {
-        private AStar pathFinder;
-        private static GameObject displayPrefab;
-        private static GameObject displayObject;
-        Texture2D displayTexture;
-        Material materialToUpdate;
+        protected GameObject displayPrefab;
+        protected GameObject displayObject;
+        protected Texture2D displayTexture;
+        protected Material materialToUpdate;
 
-        Queue<(Vector2Int, Color)> playbackQueue = new Queue<(Vector2Int, Color)>();
+        protected Queue<(Vector2Int, Color)> playbackQueue = new Queue<(Vector2Int, Color)>();
 
-        public Visualiser(AStar PathFinder)
+        protected Texture2D oldTexture;
+
+        protected int gridWidth;
+
+        public Visualiser(int GridWidth = 0)
         {
-            pathFinder = PathFinder;
+            gridWidth = GridWidth;
 
             displayPrefab ??= Resources.Load("Prefabs/DisplaySearchPath") as GameObject;
             displayObject ??= MonoBehaviour.Instantiate(displayPrefab);
@@ -27,22 +30,6 @@ namespace Paz.Utility.PathFinding
 
             displayObject.transform.position = Camera.main.transform.position + new Vector3(0.0f, -1.0f, 0.0f);
             Camera.main.orthographic = true;
-        }
-
-        public void ObservedSetModified(CollectionModifiedEventData<Node> EventData)
-        {
-            // Open Set
-            if(EventData.collection == pathFinder.OpenSet)
-            {
-                if(EventData.added != default(Node))
-                {
-                    playbackQueue.Enqueue((EventData.added, Color.magenta));
-                }
-                else
-                {
-                    playbackQueue.Enqueue((EventData.removed, Color.white));
-                }
-            }
         }
 
         public void EnqueueInstruction((Vector2Int, Color) Instruction)
@@ -55,37 +42,33 @@ namespace Paz.Utility.PathFinding
             MonoBehaviour.FindObjectOfType<GameController>().StartCoroutine(PlaybackAsync());
         }
 
-        private IEnumerator PlaybackAsync()
+        protected virtual void SetupPlayback()
         {
-            (Vector2Int, Color) CurrentInstruction;
-
             // Set initial Texture
-            int Size = pathFinder.width;
-            displayTexture = GetFreshTexture(Size);
+            displayTexture = GetFreshTexture(gridWidth);
 
-            Texture2D OldTexture = GetFreshTexture(Size);
+            oldTexture = GetFreshTexture(gridWidth);
+        }
 
-            // Set all the path blockers on the oldTexture which will be copied to the displayTexture
-            pathFinder.AllNodes.Where(x => x.isBlocker).ToList().ForEach(x =>
-            {
-                OldTexture.SetPixel(Size - 1 - x.Coord.x, x.Coord.y, Color.black);
-            });
+        protected IEnumerator PlaybackAsync()
+        {
+            SetupPlayback();
+            (Vector2Int, Color) CurrentInstruction;
 
             while(playbackQueue.Count > 0)
             {
                 CurrentInstruction = playbackQueue.Dequeue();
 
-                RenderFrame(CurrentInstruction, OldTexture);
+                RenderFrame(CurrentInstruction, oldTexture, gridWidth);
 
-                Graphics.CopyTexture(displayTexture, OldTexture);
+                Graphics.CopyTexture(displayTexture, oldTexture);
 
                 yield return new WaitForSeconds(0.001f);
             }
         }
 
-        private void RenderFrame((Vector2Int Coord, Color Colour) Instruction, Texture2D OldTexture)
+        protected void RenderFrame((Vector2Int Coord, Color Colour) Instruction, Texture2D OldTexture, int Size)
         {
-            int Size = pathFinder.width;
             displayTexture = GetFreshTexture(Size);
 
             // Copy the texture from last frame
@@ -98,7 +81,7 @@ namespace Paz.Utility.PathFinding
             materialToUpdate.mainTexture = displayTexture;
         }
 
-        private Texture2D GetFreshTexture(int Size)
+        protected Texture2D GetFreshTexture(int Size)
         {
             Texture2D Ret = new Texture2D(Size, Size, TextureFormat.RGB24, 2, true);
             Ret.anisoLevel = 0;
@@ -146,6 +129,54 @@ namespace Paz.Utility.PathFinding
 
 
             materialToUpdate.mainTexture = displayTexture;
+        }
+    }
+
+    public class PathFindingVisualiser : Visualiser
+    {
+        private AStar pathFinder;
+
+        public PathFindingVisualiser(AStar PathFinder)
+        {
+            pathFinder = PathFinder;
+            gridWidth = pathFinder.width;
+
+            displayPrefab ??= Resources.Load("Prefabs/DisplaySearchPath") as GameObject;
+            displayObject ??= MonoBehaviour.Instantiate(displayPrefab);
+            materialToUpdate = displayObject.GetComponent<Renderer>().material;
+
+            displayObject.transform.position = Camera.main.transform.position + new Vector3(0.0f, -1.0f, 0.0f);
+            Camera.main.orthographic = true;
+        }
+
+        public void ObservedSetModified(CollectionModifiedEventData<Node> EventData)
+        {
+            // Open Set
+            if(EventData.collection == pathFinder.OpenSet)
+            {
+                if(EventData.added != default(Node))
+                {
+                    playbackQueue.Enqueue((EventData.added, Color.magenta));
+                }
+                else
+                {
+                    playbackQueue.Enqueue((EventData.removed, Color.white));
+                }
+            }
+        }
+
+        protected override void SetupPlayback()
+        {
+            // Set initial Texture
+            displayTexture = GetFreshTexture(gridWidth);
+
+            oldTexture = GetFreshTexture(gridWidth);
+
+            // Set all the path blockers on the oldTexture which will be copied to the displayTexture
+            pathFinder.AllNodes.Where(x => x.isBlocker).ToList().ForEach(x =>
+            {
+                oldTexture.SetPixel(gridWidth - 1 - x.Coord.x, x.Coord.y, Color.black);
+            });
         }
     }
 }

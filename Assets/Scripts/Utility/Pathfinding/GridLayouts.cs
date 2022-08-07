@@ -8,24 +8,17 @@ namespace Paz.Utility.PathFinding
     {
         public static class RandomBlockers
         {
-            public static Node[] GenerateGrid(int GridWidth, uint Seed = 0u)
+            public static Node[] GenerateGrid(int GridWidth, Unity.Mathematics.Random Rand)
             {
                 int Width = GridWidth;
                 int Size = Width*Width;
 
                 Node[] AllNodes = new Node[Size];
 
-                Unity.Mathematics.Random Randy = new Unity.Mathematics.Random();
-
-                Seed = Seed == 0u ? (uint)new System.Random().Next() : Seed;
-                Randy.InitState(Seed);
-
-                Debug.Log($"Seed: {Seed}");
-
                 for (int i = 0; i < Size; i++)
                 {
                     AllNodes[i] = new Node(new Vector2Int(i % Width, i / Width));
-                    AllNodes[i].isBlocker = Randy.NextInt(0, 4) == 0;
+                    AllNodes[i].isBlocker = Rand.NextInt(0, 4) == 0;
                 }
 
                 int StartIndex = 0; // UnityEngine.Random.Range(0, Pather.AllNodes.Length);

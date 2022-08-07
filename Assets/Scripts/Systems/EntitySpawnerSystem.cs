@@ -27,16 +27,12 @@ public partial class EntitySpawner : SystemBase
         RequireForUpdate(levelTilePieces);
 
         enemyPrefab = PrefabConverter.Convert((UnityEngine.GameObject)UnityEngine.Resources.Load("Prefabs/Capsule"));
+
+        RequireSingletonForUpdate<PlayerTag>();
     }
 
     protected override void OnUpdate()
     {
-        if(!TryGetSingleton(out PlayerTag _))
-        {
-            return;
-        }
-
-
         float3 PlayerPos = EntityManager.GetComponentData<Translation>(GetSingletonEntity<PlayerTag>()).Value;
 
 
