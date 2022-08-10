@@ -8,7 +8,7 @@ namespace Paz.Utility.PathFinding
     {
         public static class RandomBlockers
         {
-            public static Node[] GenerateGrid(int GridWidth, Unity.Mathematics.Random Rand)
+            public static Node[] GenerateGrid(int GridWidth, ref Unity.Mathematics.Random Rand)
             {
                 int Width = GridWidth;
                 int Size = Width*Width;

@@ -47,16 +47,16 @@ public partial class SpawnPath : SystemBase
 
     private void CreatePath()
     {
-        uint Seed = 1880642439u; //1026475352u; //(uint)new System.Random().Next();
+        uint Seed = 116478577u;
         Debug.Log($"Seed: {Seed}");
 
         Unity.Mathematics.Random Rand = new Unity.Mathematics.Random(Seed);
 
 
-        Node[] AllNodes = GridLayouts.RandomBlockers.GenerateGrid(GRID_SIZE, Rand);
+        Node[] AllNodes = new Node[0];
 
         // Find a path through a random maze (max 5 attempts)
-        Node[] Path = FindPath(ref AllNodes, Rand);
+        Node[] Path = FindPath(ref AllNodes, ref Rand);
 
         // We failed to find a path
         if(Path.Length < 1)
@@ -70,7 +70,7 @@ public partial class SpawnPath : SystemBase
             Path[i].forwardNodes[0] = i < Path.Length - 1 ? Path[i+1] : null;
         }
 
-        Node[][] Branches = FindPathBranches(20, AllNodes, Path, Rand);
+        Node[][] Branches = FindPathBranches(100, AllNodes, Path, ref Rand);
 
         // Path = Path.Union(Branches.SelectMany(x => x)).Distinct().ToArray();
 
@@ -122,7 +122,7 @@ public partial class SpawnPath : SystemBase
         // Add coord numbers
         Job.WithoutBurst().WithCode(() => 
         {
-            foreach (Node N in Path)
+            foreach (Node N in Path.Union(Branches.SelectMany(x => x)))
             {
                 GameObject Go = MonoBehaviour.Instantiate(TextPrefab);
                 Vector3 Pos = new Vector3(N.Coord.x * REAL_WORLD_SCALE, 0.0f, N.Coord.y * -1.0f * REAL_WORLD_SCALE);
@@ -165,52 +165,57 @@ public partial class SpawnPath : SystemBase
         PathBranchPoints.Dispose(Dependency);
     }
 
-    private Node[] FindPath(ref Node[] AllNodes, Unity.Mathematics.Random Rand, int MaxAttempts = 5)
+    private Node[] FindPath(ref Node[] AllNodes, ref Unity.Mathematics.Random Rand, int MaxAttempts = 5)
     {
         int attempts = 0;
         Node[] Path = new Node[0];
         IEnumerable<Node> Walls = new Node[0];
         while (Path.Length < 1 && attempts++ < MaxAttempts)
         {
-            AllNodes = GridLayouts.RandomBlockers.GenerateGrid(GRID_SIZE, Rand);
+            AllNodes = GridLayouts.RandomBlockers.GenerateGrid(GRID_SIZE, ref Rand);
 
-            AStar PathFinder = new AStar(AllNodes, AllNodes[0], AllNodes[AllNodes.Length - 1]);
+            AStar PathFinder = new AStar(AllNodes, AllNodes.ChooseRandom(ref Rand), AllNodes.ChooseRandom(ref Rand));
             Path = PathFinder.Execute().ToArray();
         }
 
         return Path;
     }
 
-    Node[][] FindPathBranches(int Branches, Node[] AllNodes, Node[] OriginalPath, Unity.Mathematics.Random Rand)
+    Node[][] FindPathBranches(int Branches, Node[] AllNodes, Node[] OriginalPath, ref Unity.Mathematics.Random Rand)
     {
         Node[][] RetArray = new Node[Branches][];
         for (int i = 0; i < Branches; i++)
         {
             int attempts = 1;
-            while((RetArray[i] = FindPathBranch(AllNodes, OriginalPath, Rand)).Length < 1)
+            while((RetArray[i] = FindPathBranch(AllNodes, OriginalPath, ref Rand)).Length < 1)
             {
-                if(attempts++ > 20)
+                if(attempts++ > 10)
                 {
                     break;
                 }
+            }
+
+            if(RetArray[i].Length > 0)
+            {
+                OriginalPath = OriginalPath.Union(RetArray[i]).ToArray();
             }
         }
 
         return RetArray;
     }
 
-    Node[] FindPathBranch(Node[] AllNodes, Node[] OriginalPath, Unity.Mathematics.Random Rand)
+    Node[] FindPathBranch(Node[] AllNodes, Node[] OriginalPath, ref Unity.Mathematics.Random Rand)
     {
         IEnumerable<Node> TrimmedPath = OriginalPath.Skip(3).SkipLast(3);
 
         // Select a node to branch from
-        Node StartNode = TrimmedPath.Where(x => x.forwardNodes.Any(y => y == null)).ChooseRandom(Rand);
+        Node StartNode = TrimmedPath.Where(x => x.forwardNodes.Any(y => y == null)).ChooseRandom(ref Rand);
 
         // Branch towards this point
-        Node TargetNode = AllNodes.Except(OriginalPath).Where(x => !x.isBlocker && Vector2Int.Distance(x.Coord, StartNode.Coord) < 10).ChooseRandom(Rand);
+        Node TargetNode = AllNodes.Except(OriginalPath).Where(x => !x.isBlocker && Vector2Int.Distance(StartNode.Coord, x.Coord) < 10).ChooseRandom(ref Rand);
 
         // Return to this point on the path
-        Node ReturnNode = TrimmedPath.SkipWhile(x => x != StartNode)/*.Where(x => Vector2Int.Distance(x.Coord, TargetNode.Coord) < 30)*/.ChooseRandom(Rand);
+        Node ReturnNode = TrimmedPath.SkipWhile(x => x != StartNode).Where(x => Vector2Int.Distance(x.Coord, TargetNode.Coord) < 30 ).ChooseRandom(ref Rand);
 
         AllNodes.ForEach(x => x.isBlocker = false);
         AllNodes.ForEach(x => x.backPtr = null);

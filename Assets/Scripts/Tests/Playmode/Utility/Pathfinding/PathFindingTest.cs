@@ -19,7 +19,7 @@ public class PathFindingTest
 
         // Generate a grid of 64x64 with random tiles blocked
         // Using a seed that we know produces a completable maze
-        Node[] AllNodes = GridLayouts.RandomBlockers.GenerateGrid(64, Rand);
+        Node[] AllNodes = GridLayouts.RandomBlockers.GenerateGrid(64, ref Rand);
 
         // Create our path finder
         AStar PathFinder = new AStar()

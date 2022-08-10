@@ -10,7 +10,7 @@ public static class LINQExtensions
         int Index = new System.Random().Next(Collection.Count());
         return Collection.ElementAt(Index);
     }
-    public static T ChooseRandom<T>(this IEnumerable<T> Collection, Unity.Mathematics.Random Random)
+    public static T ChooseRandom<T>(this IEnumerable<T> Collection, ref Unity.Mathematics.Random Random)
     {
         int Index = Random.NextInt(Collection.Count());
         return Collection.ElementAt(Index);
