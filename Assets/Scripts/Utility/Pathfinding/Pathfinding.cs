@@ -170,6 +170,41 @@ namespace Paz.Utility.PathFinding
             return Path;
         }
 
+        public static IEnumerable<Vector2Int> GetNeighbours(Vector2Int CurrentNode, int Width, bool UseDiagonals = false)
+        {
+            List<Vector2Int> ReturnList = new List<Vector2Int>();
+            
+            // Get all adjacent squares (hollow 3x3 square)
+            for(int i = -1; i < 2; i++)
+            {
+                for(int j = -1; j < 2; j++)
+                {
+                    if(!UseDiagonals)
+                    {
+                        if((i != 0) && (j != 0))
+                        {
+                            continue;
+                        }
+                    }
+
+
+                    // Current Node
+                    if(i == 0 && j == 0)
+                    {
+                        continue;
+                    }
+
+                    int x = CurrentNode.x + i;
+                    int y = CurrentNode.y + j;
+                    if(x > -1 && x < Width && y > -1 && y < Width)
+                    {
+                        ReturnList.Add(new Vector2Int(x, y));
+                    }
+                }
+            }
+
+            return ReturnList;
+        }
         
 
         public static IEnumerable<Node> GetNeighbours(Node CurrentNode, Node[] AllNodes, int Width, bool UseDiagonals = false, bool ReturnBlockers = false)

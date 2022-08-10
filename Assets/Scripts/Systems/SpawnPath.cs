@@ -18,6 +18,7 @@ public partial class SpawnPath : SystemBase
     enum Direction {NONE, STRAIGHT, LEFT, RIGHT};
 
     static readonly int REAL_WORLD_SCALE = 20;
+    static readonly int GRID_SIZE = 64;
 
     NativeArray<Entity> LevelPrefabs;
 
@@ -40,17 +41,19 @@ public partial class SpawnPath : SystemBase
         this.RegisterPhysicsRuntimeSystemReadWrite();
 
         CreatePath();
+
+        RequireSingletonForUpdate<PlayerTag>();
     }
 
     private void CreatePath()
     {
-        uint Seed = 1880642439u; //(uint)new System.Random().Next();
+        uint Seed = 1880642439u; //1026475352u; //(uint)new System.Random().Next();
         Debug.Log($"Seed: {Seed}");
 
         Unity.Mathematics.Random Rand = new Unity.Mathematics.Random(Seed);
 
 
-        Node[] AllNodes = GridLayouts.RandomBlockers.GenerateGrid(64, Rand);
+        Node[] AllNodes = GridLayouts.RandomBlockers.GenerateGrid(GRID_SIZE, Rand);
 
         // Find a path through a random maze (max 5 attempts)
         Node[] Path = FindPath(ref AllNodes, Rand);
@@ -67,12 +70,12 @@ public partial class SpawnPath : SystemBase
             Path[i].forwardNodes[0] = i < Path.Length - 1 ? Path[i+1] : null;
         }
 
-        Node[][] Branches = FindPathBranches(10, AllNodes, Path, Rand);
+        Node[][] Branches = FindPathBranches(20, AllNodes, Path, Rand);
 
-        Path = Path.Union(Branches.SelectMany(x => x)).Distinct().ToArray();
+        // Path = Path.Union(Branches.SelectMany(x => x)).Distinct().ToArray();
 
         ObservableHashSet<Node> TraversedNodes = new ObservableHashSet<Node>();
-        Visualiser Vis = new Visualiser(64);
+        Visualiser Vis = new Visualiser(GRID_SIZE);
 
         TraversedNodes.Register((x) => 
         {
@@ -88,30 +91,31 @@ public partial class SpawnPath : SystemBase
 
         Debug.Assert(Path.Length == TraversedNodes.Count);
 
-        // Job #1 Spawn prefabs for each path tile
-        NativeArray<Vector2Int> PathPositions = new NativeArray<Vector2Int>(Path.Select(x => x.Coord * REAL_WORLD_SCALE).ToArray(), Allocator.Persistent);
-        NativeArray<Vector2Int> PathBranchPoints = new NativeArray<Vector2Int>(Branches.Where(x => x.Length > 0).SelectMany(x => new Node[] {x.First(), x.Last()}).ToArray().Select(x => x.Coord).ToArray(), Allocator.Persistent);
+        IEnumerable<Vector2Int> BranchPoints = Branches.Where(x => x.Length > 0).SelectMany(x => new Node[] {x.First(), x.Last()}).ToArray().Select(x => x.Coord);
 
-        SpawnPathSegments SpawnSegmentsJob = new SpawnPathSegments()
+        // Spawn the main path (excluding intersections)
+        SpawnPathParts(Path, BranchPoints, false);
+
+        // Spawn all branches and intersections
+        foreach (Node[] Branch in Branches)
         {
-            Writer = World.GetOrCreateSystem<EntityCommandBufferSystem>().CreateCommandBuffer().AsParallelWriter(),
-            Prefabs = LevelPrefabs,
-            Positions = PathPositions,
-            BranchPoints = PathBranchPoints
-        };
+            if(Branch == null || Branch.Length < 1)
+            {
+                continue;
+            }
 
-        Dependency = SpawnSegmentsJob.Schedule(Path.Length, 8, Dependency);
+            SpawnPathParts(Branch, BranchPoints, true, Path);
+        }
 
-        Dependency = Entities.WithAll<PlayerTag>().ForEach((ref Translation Trans) =>
-        {
-            Trans.Value = new float3(PathPositions[0].x, 3.0f, PathPositions[0].y * -1);
-        }).Schedule(Dependency);
+        
+
+        // Dependency = Entities.WithAll<PlayerTag>().ForEach((ref Translation Trans) =>
+        // {
+        //     Trans.Value = new float3(Path[0].Coord.x * REAL_WORLD_SCALE, 3.0f, Path[0].Coord.y * REAL_WORLD_SCALE * -1);
+        // }).Schedule(Dependency);
 
 
         Dependency.Complete();
-
-        PathPositions.Dispose();
-        PathBranchPoints.Dispose();
 
 
 
@@ -131,6 +135,36 @@ public partial class SpawnPath : SystemBase
 
     }
 
+    private void SpawnPathParts(IEnumerable<Node> Path, IEnumerable<Vector2Int> BranchPoints, bool ProcessBranchPoints = true, IEnumerable<Node> MainPath = null)
+    {
+        // Job #1 Spawn prefabs for each path tile
+
+        Vector2Int[] PathPositionsManaged = Path.Select(x => x.Coord * REAL_WORLD_SCALE).ToArray();
+
+        if(ProcessBranchPoints)
+        {
+            PathPositionsManaged = PathPositionsManaged.Union(MainPath.Select(x => x.Coord * REAL_WORLD_SCALE)).ToArray();
+        }
+
+        NativeArray<Vector2Int> PathPositions = new NativeArray<Vector2Int>(PathPositionsManaged, Allocator.Persistent);
+        NativeArray<Vector2Int> PathBranchPoints = new NativeArray<Vector2Int>(BranchPoints.ToArray(), Allocator.Persistent);
+
+        SpawnPathSegments SpawnSegmentsJob = new SpawnPathSegments()
+        {
+            Writer = World.GetOrCreateSystem<EntityCommandBufferSystem>().CreateCommandBuffer().AsParallelWriter(),
+            Prefabs = LevelPrefabs,
+            Positions = PathPositions,
+            BranchPoints = PathBranchPoints,
+            DoBranchPoints = ProcessBranchPoints
+        };
+
+        SpawnSegmentsJob.Run(Path.Count());
+        // Dependency = SpawnSegmentsJob.Schedule(Path.Count(), 8, Dependency);
+
+        PathPositions.Dispose(Dependency);
+        PathBranchPoints.Dispose(Dependency);
+    }
+
     private Node[] FindPath(ref Node[] AllNodes, Unity.Mathematics.Random Rand, int MaxAttempts = 5)
     {
         int attempts = 0;
@@ -138,7 +172,7 @@ public partial class SpawnPath : SystemBase
         IEnumerable<Node> Walls = new Node[0];
         while (Path.Length < 1 && attempts++ < MaxAttempts)
         {
-            AllNodes = GridLayouts.RandomBlockers.GenerateGrid(64, Rand);
+            AllNodes = GridLayouts.RandomBlockers.GenerateGrid(GRID_SIZE, Rand);
 
             AStar PathFinder = new AStar(AllNodes, AllNodes[0], AllNodes[AllNodes.Length - 1]);
             Path = PathFinder.Execute().ToArray();
@@ -155,7 +189,7 @@ public partial class SpawnPath : SystemBase
             int attempts = 1;
             while((RetArray[i] = FindPathBranch(AllNodes, OriginalPath, Rand)).Length < 1)
             {
-                if(attempts++ > 5)
+                if(attempts++ > 20)
                 {
                     break;
                 }
@@ -227,7 +261,12 @@ public partial class SpawnPath : SystemBase
 
     protected override void OnUpdate()
     {    
-        
+        SetComponent(GetSingletonEntity<PlayerTag>(), new Translation()
+        {
+            Value = new float3(0.0f * REAL_WORLD_SCALE, 3.0f, 0.0f)
+        });
+
+        Enabled = false;
     }
 
     protected override void OnStopRunning()
@@ -238,16 +277,23 @@ public partial class SpawnPath : SystemBase
         }
     }
 
-    [BurstCompile]
+    // [BurstCompile]
     public struct SpawnPathSegments : IJobParallelFor
     {
         public EntityCommandBuffer.ParallelWriter Writer;
         [ReadOnly] public NativeArray<Entity> Prefabs;
         [ReadOnly] public NativeArray<Vector2Int> Positions;
         [ReadOnly] public NativeArray<Vector2Int> BranchPoints;
+        [ReadOnly] public bool DoBranchPoints;
 
         public void Execute(int index)
         {
+            if(!DoBranchPoints && BranchPoints.Contains(Positions[index] / REAL_WORLD_SCALE))
+            {
+                return;
+            }
+
+
             float3 SpawnPos = new float3()
             {
                 x = Positions[index].x,
@@ -258,9 +304,12 @@ public partial class SpawnPath : SystemBase
             
             IsCorner(Positions, index, out bool Corner);
             GetSegmentPrefab(Positions, BranchPoints, index, Corner, out int PrefabIndex);
-            GetSegmentRotation(Positions, index, Corner, out float3 Rotation);
+            GetSegmentRotation(Positions, index, PrefabIndex, out float3 Rotation);
 
-            
+            if(PrefabIndex == -1)
+            {
+                return;
+            }
 
             Entity SpawnedEntity = Writer.Instantiate(index, Prefabs[PrefabIndex]);
             Writer.SetComponent<Translation>(index, SpawnedEntity, new Translation() { Value = SpawnPos});
@@ -281,18 +330,17 @@ public partial class SpawnPath : SystemBase
 
         private void GetSegmentPrefab(NativeArray<Vector2Int> Positions, NativeArray<Vector2Int> BranchPoints, int index, bool CornerPiece, out int PrefabIndex)
         {
+            if(BranchPoints.Contains(Positions[index] / REAL_WORLD_SCALE))
+            {
+                PrefabIndex = 3;
+                return;
+            }
+
             if(CornerPiece)
             {
                 Vector2Int PrevPos = Positions[index - 1] / REAL_WORLD_SCALE;
                 Vector2Int CurrentPos = Positions[index] / REAL_WORLD_SCALE;
                 Vector2Int NextPos = Positions[index + 1] / REAL_WORLD_SCALE;
-
-
-                if(BranchPoints.Contains(CurrentPos))
-                {
-                    PrefabIndex = 3;
-                    return;
-                }
 
                 // Determine which side of the vector the point lies on
                 bool RightTurn = ((CurrentPos.x - PrevPos.x)*(NextPos.y - PrevPos.y) - (CurrentPos.y - PrevPos.y)*(NextPos.x - PrevPos.x)) > 0;
@@ -312,21 +360,48 @@ public partial class SpawnPath : SystemBase
             }
         }
 
-        private void GetSegmentRotation(NativeArray<Vector2Int> Positions, int index, bool CornerPiece, out float3 Rotation)
+        private void GetSegmentRotation(NativeArray<Vector2Int> Positions, int index, int PrefabIndex, out float3 Rotation)
         {
             Rotation = new float3(0.0f, 0.0f, 1.0f);
-            if(index < 1)
+            if(PrefabIndex != 3 && index < 1)
             {
                 index++;
             }
 
+            // T
+            if(PrefabIndex == 3)
+            {
+                Vector2Int CurrentCoord = Positions[index] / REAL_WORLD_SCALE;
+                IEnumerable<Vector2Int> AllNeighbours = AStar.GetNeighbours(Positions[index] / REAL_WORLD_SCALE, GRID_SIZE);
+                IEnumerable<Vector2Int> PathNeighbours = AllNeighbours.Where(x => Positions.Contains(x * REAL_WORLD_SCALE));
+                IEnumerable<Vector2Int> Neighbours = PathNeighbours.Select(x => x - CurrentCoord);
+                Vector2Int ClosedDirection = Vector2Int.zero;
+                if(Neighbours.Sum(x => x.x) != 0)
+                {
+                    ClosedDirection = Neighbours.FirstOrDefault(x => x.x != 0) * -1;
+                }
+                else
+                {
+                    ClosedDirection = Neighbours.FirstOrDefault(x => x.y != 0);
+                }
 
-            if(CornerPiece)
+                // (0, -1) == T
+                // (-1, 0) == |-
+                // (0, 1) == _|_
+                // (1, 0) == -|
+                // Rotation = new float3(-1, 0, 0);
+                // return;
+
+                Rotation = new float3(ClosedDirection.x, 0.0f, ClosedDirection.y );
+            }
+            // Corner
+            else if(PrefabIndex == 1 || PrefabIndex == 2)
             {
                 Vector2Int BeforeToThis = Positions[index] / REAL_WORLD_SCALE - Positions[index - 1] / REAL_WORLD_SCALE;
                 Rotation = new float3(BeforeToThis.x, 0.0f, -BeforeToThis.y);
             }
-            else
+            // Straight
+            else if(PrefabIndex == 0)
             {
                 Vector2Int Difference = Positions[index] / REAL_WORLD_SCALE - Positions[index - 1] / REAL_WORLD_SCALE;
                 Rotation = new float3(math.abs(Difference.y), 0.0f, math.abs(Difference.x));
