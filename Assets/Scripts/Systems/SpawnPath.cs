@@ -47,7 +47,7 @@ public partial class SpawnPath : SystemBase
 
     private void CreatePath()
     {
-        uint Seed = 116478577u;
+        uint Seed = (uint)new System.Random().Next();// 116478577u;
         Debug.Log($"Seed: {Seed}");
 
         Unity.Mathematics.Random Rand = new Unity.Mathematics.Random(Seed);
@@ -74,6 +74,15 @@ public partial class SpawnPath : SystemBase
 
         // Path = Path.Union(Branches.SelectMany(x => x)).Distinct().ToArray();
 
+        Dictionary<int, Color> BranchColours = new Dictionary<int, Color>();
+        Node[][] ActualBranches = Branches.Where(x => x.Length > 0).ToArray();
+        for (int i = 0; i < ActualBranches.Length; i++)
+        {
+            int ColourValue = 255 / ActualBranches.Length * i;
+            BranchColours[i] = new Color(ColourValue, ColourValue, ColourValue);
+        }
+
+
         ObservableHashSet<Node> TraversedNodes = new ObservableHashSet<Node>();
         Visualiser Vis = new Visualiser(GRID_SIZE);
 
@@ -81,7 +90,8 @@ public partial class SpawnPath : SystemBase
         {
             if(x.operation == CollectionModifiedEventEnum.ADDED)
             {
-                Vis.EnqueueInstruction((x.added.Coord, Color.red));
+                int ColourIndex = System.Array.IndexOf(Branches, Branches.FirstOrDefault(y => y.Contains(x.added)));
+                Vis.EnqueueInstruction((x.added.Coord, BranchColours.ContainsKey(ColourIndex) ? BranchColours[ColourIndex] : Color.red));
             }
         });
 
@@ -174,7 +184,9 @@ public partial class SpawnPath : SystemBase
         {
             AllNodes = GridLayouts.RandomBlockers.GenerateGrid(GRID_SIZE, ref Rand);
 
-            AStar PathFinder = new AStar(AllNodes, AllNodes.ChooseRandom(ref Rand), AllNodes.ChooseRandom(ref Rand));
+            IEnumerable<Node> EdgeNodes = AllNodes.Where(x => x.Coord.x == 0 || x.Coord.y == 0 || x.Coord.x == GRID_SIZE - 1 || x.Coord.y == GRID_SIZE - 1);
+
+            AStar PathFinder = new AStar(AllNodes, EdgeNodes.ChooseRandom(ref Rand), EdgeNodes.ChooseRandom(ref Rand));
             Path = PathFinder.Execute().ToArray();
         }
 
@@ -184,10 +196,13 @@ public partial class SpawnPath : SystemBase
     Node[][] FindPathBranches(int Branches, Node[] AllNodes, Node[] OriginalPath, ref Unity.Mathematics.Random Rand)
     {
         Node[][] RetArray = new Node[Branches][];
+
+        IEnumerable<Node> Blockers = OriginalPath;
+
         for (int i = 0; i < Branches; i++)
         {
             int attempts = 1;
-            while((RetArray[i] = FindPathBranch(AllNodes, OriginalPath, ref Rand)).Length < 1)
+            while((RetArray[i] = FindPathBranch(AllNodes, OriginalPath, Blockers, ref Rand)).Length < 1)
             {
                 if(attempts++ > 10)
                 {
@@ -195,16 +210,16 @@ public partial class SpawnPath : SystemBase
                 }
             }
 
-            if(RetArray[i].Length > 0)
+            if (RetArray[i].Length > 0)
             {
-                OriginalPath = OriginalPath.Union(RetArray[i]).ToArray();
+                Blockers = Blockers.Union(RetArray[i]).ToArray();
             }
         }
 
         return RetArray;
     }
 
-    Node[] FindPathBranch(Node[] AllNodes, Node[] OriginalPath, ref Unity.Mathematics.Random Rand)
+    Node[] FindPathBranch(Node[] AllNodes, Node[] OriginalPath, IEnumerable<Node> Blockers, ref Unity.Mathematics.Random Rand)
     {
         IEnumerable<Node> TrimmedPath = OriginalPath.Skip(3).SkipLast(3);
 
@@ -219,7 +234,7 @@ public partial class SpawnPath : SystemBase
 
         AllNodes.ForEach(x => x.isBlocker = false);
         AllNodes.ForEach(x => x.backPtr = null);
-        AllNodes.Intersect(OriginalPath).ForEach(x => x.isBlocker = true);
+        AllNodes.Intersect(Blockers).ForEach(x => x.isBlocker = true);
         StartNode.isBlocker = false;
         TargetNode.isBlocker = false;
         ReturnNode.isBlocker = false;
