@@ -130,6 +130,14 @@ namespace Paz.Utility.PathFinding
 
             materialToUpdate.mainTexture = displayTexture;
         }
+
+        public void SetPosition(Vector3 NewPos)
+        {
+            if(displayObject != null)
+            {
+                displayObject.transform.position = NewPos;
+            }
+        }
     }
 
     public class PathFindingVisualiser : Visualiser

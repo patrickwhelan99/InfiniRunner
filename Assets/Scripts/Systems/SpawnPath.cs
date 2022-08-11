@@ -11,9 +11,13 @@ using UnityEngine;
 using Unity.Physics.Systems;
 using Paz.Utility.Collections;
 using TMPro;
+using Unity.Physics;
 
+[UpdateInGroup(typeof(VariableSystemGroupThreeSeconds))]
+[AlwaysUpdateSystem]
 public partial class SpawnPath : SystemBase
 {
+    EntityCommandBufferSystem ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
 
     enum Direction {NONE, STRAIGHT, LEFT, RIGHT};
 
@@ -23,6 +27,10 @@ public partial class SpawnPath : SystemBase
     NativeArray<Entity> LevelPrefabs;
 
     GameObject TextPrefab;
+
+    Vector3 playerSpawnPos;
+
+    Entity playerEnt;
 
     protected override void OnCreate()
     {
@@ -40,14 +48,14 @@ public partial class SpawnPath : SystemBase
     {
         this.RegisterPhysicsRuntimeSystemReadWrite();
 
-        CreatePath();
+        // CreatePath();
 
-        RequireSingletonForUpdate<PlayerTag>();
+        // RequireSingletonForUpdate<PlayerTag>();
     }
 
     private void CreatePath()
     {
-        uint Seed = (uint)new System.Random().Next();// 116478577u;
+        uint Seed = (uint)new System.Random().Next();//1023824352u;// 116478577u;
         Debug.Log($"Seed: {Seed}");
 
         Unity.Mathematics.Random Rand = new Unity.Mathematics.Random(Seed);
@@ -64,13 +72,15 @@ public partial class SpawnPath : SystemBase
             return;
         }
 
+        playerSpawnPos = new Vector3(Path[0].Coord.x * REAL_WORLD_SCALE, 3.0f, Path[0].Coord.y * REAL_WORLD_SCALE);
+
         for (int i = 0; i < Path.Length; i++)
         {
             Path[i].backPtr = null;
             Path[i].forwardNodes[0] = i < Path.Length - 1 ? Path[i+1] : null;
         }
 
-        Node[][] Branches = FindPathBranches(100, AllNodes, Path, ref Rand);
+        Node[][] Branches = FindPathBranches(10, AllNodes, Path, ref Rand);
 
         // Path = Path.Union(Branches.SelectMany(x => x)).Distinct().ToArray();
 
@@ -96,6 +106,8 @@ public partial class SpawnPath : SystemBase
         });
 
         TraverseNodes(Path[0], ref TraversedNodes);
+
+        Vis.SetPosition(playerSpawnPos + new Vector3(0.0f, 2.0f, 0.0f));
 
         Vis.Playback();
 
@@ -125,51 +137,46 @@ public partial class SpawnPath : SystemBase
         // }).Schedule(Dependency);
 
 
-        Dependency.Complete();
+        // Dependency.Complete();
 
 
 
         // Add coord numbers
-        Job.WithoutBurst().WithCode(() => 
-        {
-            foreach (Node N in Path.Union(Branches.SelectMany(x => x)))
-            {
-                GameObject Go = MonoBehaviour.Instantiate(TextPrefab);
-                Vector3 Pos = new Vector3(N.Coord.x * REAL_WORLD_SCALE, 0.0f, N.Coord.y * -1.0f * REAL_WORLD_SCALE);
-                TMP_Text T = Go.GetComponent<TMP_Text>();
-                T.text = $"{N.Coord.x},{N.Coord.y}";
-                Go.transform.position = Pos;
-            }
-        }).Run();
+        // Job.WithoutBurst().WithCode(() => 
+        // {
+        //     foreach (Node N in Path.Union(Branches.SelectMany(x => x)))
+        //     {
+        //         GameObject Go = MonoBehaviour.Instantiate(TextPrefab);
+        //         Vector3 Pos = new Vector3(N.Coord.x * REAL_WORLD_SCALE, 0.0f, N.Coord.y * -1.0f * REAL_WORLD_SCALE);
+        //         TMP_Text T = Go.GetComponent<TMP_Text>();
+        //         T.text = $"{N.Coord.x},{N.Coord.y}";
+        //         Go.transform.position = Pos;
+        //     }
 
-
+        //     Debug.Break();
+        // }).Run();
     }
 
     private void SpawnPathParts(IEnumerable<Node> Path, IEnumerable<Vector2Int> BranchPoints, bool ProcessBranchPoints = true, IEnumerable<Node> MainPath = null)
     {
-        // Job #1 Spawn prefabs for each path tile
+        // Job #2 Spawn prefabs for each path tile
+        IEnumerable<Node> PathNodesManaged = ProcessBranchPoints ? Path.Union(MainPath).ToArray() : Path.ToArray();
 
-        Vector2Int[] PathPositionsManaged = Path.Select(x => x.Coord * REAL_WORLD_SCALE).ToArray();
 
-        if(ProcessBranchPoints)
-        {
-            PathPositionsManaged = PathPositionsManaged.Union(MainPath.Select(x => x.Coord * REAL_WORLD_SCALE)).ToArray();
-        }
-
-        NativeArray<Vector2Int> PathPositions = new NativeArray<Vector2Int>(PathPositionsManaged, Allocator.Persistent);
+        NativeArray<Vector2Int> PathPositions = new NativeArray<Vector2Int>(PathNodesManaged.Select(x => x.Coord).ToArray(), Allocator.Persistent);
         NativeArray<Vector2Int> PathBranchPoints = new NativeArray<Vector2Int>(BranchPoints.ToArray(), Allocator.Persistent);
 
         SpawnPathSegments SpawnSegmentsJob = new SpawnPathSegments()
         {
             Writer = World.GetOrCreateSystem<EntityCommandBufferSystem>().CreateCommandBuffer().AsParallelWriter(),
             Prefabs = LevelPrefabs,
-            Positions = PathPositions,
+            PathCoords = PathPositions,
             BranchPoints = PathBranchPoints,
             DoBranchPoints = ProcessBranchPoints
         };
 
-        SpawnSegmentsJob.Run(Path.Count());
-        // Dependency = SpawnSegmentsJob.Schedule(Path.Count(), 8, Dependency);
+        // SpawnSegmentsJob.Run(Path.Count());
+        Dependency = SpawnSegmentsJob.Schedule(Path.Count(), 8, Dependency);
 
         PathPositions.Dispose(Dependency);
         PathBranchPoints.Dispose(Dependency);
@@ -281,12 +288,32 @@ public partial class SpawnPath : SystemBase
 
     protected override void OnUpdate()
     {    
-        SetComponent(GetSingletonEntity<PlayerTag>(), new Translation()
-        {
-            Value = new float3(0.0f * REAL_WORLD_SCALE, 3.0f, 0.0f)
-        });
+        // Enabled = false;
 
-        Enabled = false;
+        EntityCommandBuffer.ParallelWriter Writer = ecbs.CreateCommandBuffer().AsParallelWriter();
+
+        Dependency = Entities.WithAll<LevelTileTag>().ForEach((Entity E) => 
+        {
+            Writer.DestroyEntity(E.Index, E);
+        }).ScheduleParallel(Dependency);
+
+        CreatePath();
+
+        // Dependency.Complete();
+
+        
+        // playerEnt = GetSingletonEntity<PlayerTag>();
+        
+
+        // Job.WithBurst().WithCode(() => 
+        // {
+        //     EntityManager.SetComponentData(playerEnt, new PhysicsVelocity());
+
+        //     EntityManager.SetComponentData(playerEnt, new Translation()
+        //     {
+        //         Value = playerSpawnPos
+        //     });
+        // }).Schedule(Dependency);        
     }
 
     protected override void OnStopRunning()
@@ -297,18 +324,19 @@ public partial class SpawnPath : SystemBase
         }
     }
 
-    // [BurstCompile]
+    [BurstCompile]
     public struct SpawnPathSegments : IJobParallelFor
     {
         public EntityCommandBuffer.ParallelWriter Writer;
         [ReadOnly] public NativeArray<Entity> Prefabs;
-        [ReadOnly] public NativeArray<Vector2Int> Positions;
+        [ReadOnly] public NativeArray<Vector2Int> PathCoords;
         [ReadOnly] public NativeArray<Vector2Int> BranchPoints;
         [ReadOnly] public bool DoBranchPoints;
 
+        [BurstCompile]
         public void Execute(int index)
         {
-            if(!DoBranchPoints && BranchPoints.Contains(Positions[index] / REAL_WORLD_SCALE))
+            if(!DoBranchPoints && BranchPoints.Contains(PathCoords[index]))
             {
                 return;
             }
@@ -316,73 +344,70 @@ public partial class SpawnPath : SystemBase
 
             float3 SpawnPos = new float3()
             {
-                x = Positions[index].x,
+                x = PathCoords[index].x * REAL_WORLD_SCALE,
                 y = -2.0f,
-                z = Positions[index].y * -1.0f // so the graph is drawn from top left instead of bottom left
+                z = PathCoords[index].y * REAL_WORLD_SCALE * -1.0f // so the graph is drawn from top left instead of bottom left
             };
 
             
-            IsCorner(Positions, index, out bool Corner);
-            GetSegmentPrefab(Positions, BranchPoints, index, Corner, out int PrefabIndex);
-            GetSegmentRotation(Positions, index, PrefabIndex, out float3 Rotation);
-
-            if(PrefabIndex == -1)
-            {
-                return;
-            }
+            bool Corner = IsCorner(PathCoords, index);
+            int PrefabIndex = GetSegmentPrefab(PathCoords, BranchPoints, index, Corner);
+            float3 Rotation = GetSegmentRotation(PathCoords, index, PrefabIndex);
 
             Entity SpawnedEntity = Writer.Instantiate(index, Prefabs[PrefabIndex]);
             Writer.SetComponent<Translation>(index, SpawnedEntity, new Translation() { Value = SpawnPos});
             Writer.SetComponent<Rotation>(index, SpawnedEntity, new Rotation() { Value = quaternion.LookRotation(Rotation, new float3(0, 1, 0))});
         }
 
-        private void IsCorner(NativeArray<Vector2Int> Positions, int index, out bool IsCorner)
+        [BurstCompile]
+        private bool IsCorner(NativeArray<Vector2Int> Positions, int index)
         {
             Vector2Int Difference = new Vector2Int();
             if(index > 0 && index < Positions.Length - 1)
             {
                 // Difference in grid co-ordinates between the previous and next nodes
-                Difference = Positions[index + 1] / REAL_WORLD_SCALE - Positions[index - 1] / REAL_WORLD_SCALE;
+                Difference = Positions[index + 1] - Positions[index - 1];
             }
 
-            IsCorner = Difference.x != 0 && Difference.y != 0;
+            return Difference.x != 0 && Difference.y != 0;
         }
 
-        private void GetSegmentPrefab(NativeArray<Vector2Int> Positions, NativeArray<Vector2Int> BranchPoints, int index, bool CornerPiece, out int PrefabIndex)
+        [BurstCompile]
+        private int GetSegmentPrefab(NativeArray<Vector2Int> Positions, NativeArray<Vector2Int> BranchPoints, int index, bool CornerPiece)
         {
-            if(BranchPoints.Contains(Positions[index] / REAL_WORLD_SCALE))
+            if(BranchPoints.Contains(Positions[index]))
             {
-                PrefabIndex = 3;
-                return;
+                return 3;
             }
 
             if(CornerPiece)
             {
-                Vector2Int PrevPos = Positions[index - 1] / REAL_WORLD_SCALE;
-                Vector2Int CurrentPos = Positions[index] / REAL_WORLD_SCALE;
-                Vector2Int NextPos = Positions[index + 1] / REAL_WORLD_SCALE;
+                Vector2Int PrevPos = Positions[index - 1];
+                Vector2Int CurrentPos = Positions[index];
+                Vector2Int NextPos = Positions[index + 1];
 
                 // Determine which side of the vector the point lies on
                 bool RightTurn = ((CurrentPos.x - PrevPos.x)*(NextPos.y - PrevPos.y) - (CurrentPos.y - PrevPos.y)*(NextPos.x - PrevPos.x)) > 0;
 
                 if(RightTurn)
                 {
-                    PrefabIndex = 1;
+                    return 1;
                 }
                 else
                 {
-                    PrefabIndex = 2;
+                    return 2;
                 }
             }
             else
             {
-                PrefabIndex = 0;
+                return 0;
             }
         }
 
-        private void GetSegmentRotation(NativeArray<Vector2Int> Positions, int index, int PrefabIndex, out float3 Rotation)
+        [BurstCompile]
+        private float3 GetSegmentRotation(NativeArray<Vector2Int> PathCoords, int index, int PrefabIndex)
         {
-            Rotation = new float3(0.0f, 0.0f, 1.0f);
+            float3 Rotation = new float3(0.0f, 0.0f, 1.0f);
             if(PrefabIndex != 3 && index < 1)
             {
                 index++;
@@ -391,41 +416,45 @@ public partial class SpawnPath : SystemBase
             // T
             if(PrefabIndex == 3)
             {
-                Vector2Int CurrentCoord = Positions[index] / REAL_WORLD_SCALE;
-                IEnumerable<Vector2Int> AllNeighbours = AStar.GetNeighbours(Positions[index] / REAL_WORLD_SCALE, GRID_SIZE);
-                IEnumerable<Vector2Int> PathNeighbours = AllNeighbours.Where(x => Positions.Contains(x * REAL_WORLD_SCALE));
-                IEnumerable<Vector2Int> Neighbours = PathNeighbours.Select(x => x - CurrentCoord);
+                Vector2Int CurrentCoord = PathCoords[index];
+
+                NativeArray<Vector2Int> Neighbours = new NativeArray<Vector2Int>(4, Allocator.Temp);
+                Neighbours[0] = new Vector2Int(CurrentCoord.x, CurrentCoord.y - 1);
+                Neighbours[1] = new Vector2Int(CurrentCoord.x + 1, CurrentCoord.y);
+                Neighbours[2] = new Vector2Int(CurrentCoord.x, CurrentCoord.y + 1);
+                Neighbours[3] = new Vector2Int(CurrentCoord.x - 1, CurrentCoord.y);
+
                 Vector2Int ClosedDirection = Vector2Int.zero;
-                if(Neighbours.Sum(x => x.x) != 0)
+
+                for (int i = 0; i < Neighbours.Length; i++)
                 {
-                    ClosedDirection = Neighbours.FirstOrDefault(x => x.x != 0) * -1;
-                }
-                else
-                {
-                    ClosedDirection = Neighbours.FirstOrDefault(x => x.y != 0);
+                    if(!PathCoords.Contains(Neighbours[i]))
+                    {
+                        ClosedDirection = Neighbours[i] - CurrentCoord;
+                    }
                 }
 
-                // (0, -1) == T
-                // (-1, 0) == |-
-                // (0, 1) == _|_
-                // (1, 0) == -|
-                // Rotation = new float3(-1, 0, 0);
-                // return;
+                Rotation = new float3(ClosedDirection.x, 0.0f, ClosedDirection.y * -1);
 
-                Rotation = new float3(ClosedDirection.x, 0.0f, ClosedDirection.y );
+                Neighbours.Dispose();
+                return Rotation;
             }
             // Corner
             else if(PrefabIndex == 1 || PrefabIndex == 2)
             {
-                Vector2Int BeforeToThis = Positions[index] / REAL_WORLD_SCALE - Positions[index - 1] / REAL_WORLD_SCALE;
+                Vector2Int BeforeToThis = PathCoords[index] - PathCoords[index - 1];
                 Rotation = new float3(BeforeToThis.x, 0.0f, -BeforeToThis.y);
+                return Rotation;
             }
             // Straight
             else if(PrefabIndex == 0)
             {
-                Vector2Int Difference = Positions[index] / REAL_WORLD_SCALE - Positions[index - 1] / REAL_WORLD_SCALE;
+                Vector2Int Difference = PathCoords[index] - PathCoords[index - 1];
                 Rotation = new float3(math.abs(Difference.y), 0.0f, math.abs(Difference.x));
+                return Rotation;
             }
+
+            return Rotation;
         }
     }
 

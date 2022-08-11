@@ -137,7 +137,7 @@ namespace Paz.Utility.PathFinding
                 OpenSet.Remove(CurrentNode);
 
 
-                Node[] Neighbours = GetNeighbours(CurrentNode, AllNodes, width).ToArray();
+                Node[] Neighbours = GetNeighboursQuick(AllNodes, CurrentNode, width).ToArray(); // GetNeighbours(CurrentNode, AllNodes, width).ToArray(); 
 
 
                 for (int i = 0; i < Neighbours.Length; i++)
@@ -170,40 +170,17 @@ namespace Paz.Utility.PathFinding
             return Path;
         }
 
-        public static IEnumerable<Vector2Int> GetNeighbours(Vector2Int CurrentNode, int Width, bool UseDiagonals = false)
+        public static IEnumerable<Node> GetNeighboursQuick(Node[] AllNodes, Node CurrentNode, int Width)
         {
-            List<Vector2Int> ReturnList = new List<Vector2Int>();
-            
-            // Get all adjacent squares (hollow 3x3 square)
-            for(int i = -1; i < 2; i++)
+            int CurrIndex = CurrentNode.Coord.y * Width + CurrentNode.Coord.x;
+            int Max = AllNodes.Length - 1;
+            return new Node[]
             {
-                for(int j = -1; j < 2; j++)
-                {
-                    if(!UseDiagonals)
-                    {
-                        if((i != 0) && (j != 0))
-                        {
-                            continue;
-                        }
-                    }
-
-
-                    // Current Node
-                    if(i == 0 && j == 0)
-                    {
-                        continue;
-                    }
-
-                    int x = CurrentNode.x + i;
-                    int y = CurrentNode.y + j;
-                    if(x > -1 && x < Width && y > -1 && y < Width)
-                    {
-                        ReturnList.Add(new Vector2Int(x, y));
-                    }
-                }
-            }
-
-            return ReturnList;
+                CurrIndex - Width > 0 ? AllNodes[CurrIndex - Width] : null,
+                CurrIndex + Width < Max ? AllNodes[CurrIndex + Width] : null,
+                CurrIndex != 0 ? AllNodes[CurrIndex - 1] : null,
+                CurrIndex < Max ? AllNodes[CurrIndex + 1] : null
+            }.Where(x => x != null && !x.isBlocker);
         }
         
 
