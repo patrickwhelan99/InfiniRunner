@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Collections;
 using UnityEngine;
 
 namespace Paz.Utility.PathFinding
@@ -8,24 +9,23 @@ namespace Paz.Utility.PathFinding
     {
         public static class RandomBlockers
         {
-            public static Node[] GenerateGrid(int GridWidth, ref Unity.Mathematics.Random Rand)
+            public static NativeArray<Node> GenerateGrid(int GridWidth, ref Unity.Mathematics.Random Rand)
             {
                 int Width = GridWidth;
                 int Size = Width*Width;
 
-                Node[] AllNodes = new Node[Size];
-
-                for (int i = 0; i < Size; i++)
-                {
-                    AllNodes[i] = new Node(new Vector2Int(i % Width, i / Width));
-                    AllNodes[i].isBlocker = Rand.NextInt(0, 4) == 0;
-                }
+                NativeArray<Node> AllNodes = new NativeArray<Node>(GridWidth * GridWidth, Allocator.TempJob);
 
                 int StartIndex = 0; // UnityEngine.Random.Range(0, Pather.AllNodes.Length);
                 int EndIndex = AllNodes.Length - 1; // UnityEngine.Random.Range(0, Pather.AllNodes.Length);
 
-                AllNodes[StartIndex].isBlocker = false;
-                AllNodes[EndIndex].isBlocker = false;
+                for (int i = 0; i < Size; i++)
+                {
+                    Node NewNode = new Node(new Vector2Int(i % Width, i / Width));
+                    NewNode.isBlocker = i != StartIndex && i != EndIndex && Rand.NextInt(0, 4) == 0;
+
+                    AllNodes[i] = NewNode;
+                }
 
                 return AllNodes;
             }

@@ -32,17 +32,22 @@ namespace Paz.Utility.PathFinding
             Camera.main.orthographic = true;
         }
 
+        public void SetInstructions(IEnumerable<(Vector2Int, Color)> Instructions)
+        {
+            playbackQueue = new Queue<(Vector2Int, Color)>(Instructions);
+        }
+
         public void EnqueueInstruction((Vector2Int, Color) Instruction)
         {
             playbackQueue.Enqueue(Instruction);
         }
 
-        public void Playback()
+        public void Playback(IEnumerable<Node> AllNodes = null)
         {
-            MonoBehaviour.FindObjectOfType<GameController>().StartCoroutine(PlaybackAsync());
+            MonoBehaviour.FindObjectOfType<GameController>().StartCoroutine(PlaybackAsync(AllNodes));
         }
 
-        protected virtual void SetupPlayback()
+        protected virtual void SetupPlayback(IEnumerable<Node> AllNodes)
         {
             // Set initial Texture
             displayTexture = GetFreshTexture(gridWidth);
@@ -50,9 +55,9 @@ namespace Paz.Utility.PathFinding
             oldTexture = GetFreshTexture(gridWidth);
         }
 
-        protected IEnumerator PlaybackAsync()
+        protected IEnumerator PlaybackAsync(IEnumerable<Node> AllNodes)
         {
-            SetupPlayback();
+            SetupPlayback(AllNodes);
             (Vector2Int, Color) CurrentInstruction;
 
             while(playbackQueue.Count > 0)
@@ -101,7 +106,7 @@ namespace Paz.Utility.PathFinding
                 Node ThisNode = AllNodes[i];
 
                 Color PixelColour = Color.white;
-                if(ThisNode == CurrentNode)
+                if(ThisNode.Equals(CurrentNode))
                 {
                     PixelColour = Color.red;
                 }
@@ -142,38 +147,35 @@ namespace Paz.Utility.PathFinding
 
     public class PathFindingVisualiser : Visualiser
     {
-        private AStar pathFinder;
-
-        public PathFindingVisualiser(AStar PathFinder)
+        public PathFindingVisualiser(int Width) : base(Width)
         {
-            pathFinder = PathFinder;
-            gridWidth = pathFinder.width;
+            // gridWidth = Width;
 
-            displayPrefab ??= Resources.Load("Prefabs/DisplaySearchPath") as GameObject;
-            displayObject ??= MonoBehaviour.Instantiate(displayPrefab);
-            materialToUpdate = displayObject.GetComponent<Renderer>().material;
+            // displayPrefab ??= Resources.Load("Prefabs/DisplaySearchPath") as GameObject;
+            // displayObject ??= MonoBehaviour.Instantiate(displayPrefab);
+            // materialToUpdate = displayObject.GetComponent<Renderer>().material;
 
-            displayObject.transform.position = Camera.main.transform.position + new Vector3(0.0f, -1.0f, 0.0f);
-            Camera.main.orthographic = true;
+            // displayObject.transform.position = Camera.main.transform.position + new Vector3(0.0f, -1.0f, 0.0f);
+            // Camera.main.orthographic = true;
         }
 
-        public void ObservedSetModified(CollectionModifiedEventData<Node> EventData)
-        {
-            // Open Set
-            if(EventData.collection == pathFinder.OpenSet)
-            {
-                if(EventData.added != default(Node))
-                {
-                    playbackQueue.Enqueue((EventData.added, Color.magenta));
-                }
-                else
-                {
-                    playbackQueue.Enqueue((EventData.removed, Color.white));
-                }
-            }
-        }
+        // public void ObservedSetModified(CollectionModifiedEventData<Node> EventData)
+        // {
+        //     // Open Set
+        //     if(EventData.collection == pathFinder.OpenSet)
+        //     {
+        //         if(EventData.added != default(Node))
+        //         {
+        //             playbackQueue.Enqueue((EventData.added, Color.magenta));
+        //         }
+        //         else
+        //         {
+        //             playbackQueue.Enqueue((EventData.removed, Color.white));
+        //         }
+        //     }
+        // }
 
-        protected override void SetupPlayback()
+        protected override void SetupPlayback(IEnumerable<Node> AllNodes)
         {
             // Set initial Texture
             displayTexture = GetFreshTexture(gridWidth);
@@ -181,7 +183,7 @@ namespace Paz.Utility.PathFinding
             oldTexture = GetFreshTexture(gridWidth);
 
             // Set all the path blockers on the oldTexture which will be copied to the displayTexture
-            pathFinder.AllNodes.Where(x => x.isBlocker).ToList().ForEach(x =>
+            AllNodes.Where(x => x.isBlocker).ToList().ForEach(x =>
             {
                 oldTexture.SetPixel(gridWidth - 1 - x.Coord.x, x.Coord.y, Color.black);
             });
