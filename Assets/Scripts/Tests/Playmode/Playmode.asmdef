@@ -10,7 +10,8 @@
         "Unity.Burst",
         "Unity.Entities.Tests",
         "Unity.Mathematics",
-        "Unity.Transforms"
+        "Unity.Transforms",
+        "Unity.Collections"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
