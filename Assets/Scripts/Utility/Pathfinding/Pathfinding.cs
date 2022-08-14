@@ -273,11 +273,11 @@ namespace Paz.Utility.PathFinding
         public struct AsJob : IJob
         {
             public NativeArray<Node> allNodes;
-            public NativeParallelMultiHashMap<Vector2Int, Vector2Int> forwardNodes;
             public NativeParallelHashMap<Vector2Int, Vector2Int> backwardNodes;
             public NativeList<Vector2Int> path;
             public NativeParallelHashSet<Node> openSet;
-            public Node startNode, currentNode, endNode;
+            public Vector2Int startNodeCoord, endNodeCoord;
+            Node startNode, currentNode, endNode;
             public float heuristicWeight;
             public int width;
 
@@ -288,6 +288,9 @@ namespace Paz.Utility.PathFinding
             {
                 // Grid dimensions
                 width = allNodes[allNodes.Length - 1].Coord.x + 1;
+
+                startNode = allNodes.GetNodeQuick(startNodeCoord);
+                endNode = allNodes.GetNodeQuick(endNodeCoord);
 
                 // Set starting node's values
                 startNode.g = 0.0f;
@@ -310,6 +313,16 @@ namespace Paz.Utility.PathFinding
                         foreach (Vector2Int Coord in path)
                         {
                             visualiserInstructionStack.Add((Coord, Color.green));
+                        }
+
+                        // Reverse the completed path
+                        // Burst doesn't let us use IEnumerable as it boxes NativeArray
+                        Vector2Int Tmp;
+                        for (int i = 0; i < path.Length / 2; i++)
+                        {
+                            Tmp = path[i];
+                            path[i] = path[path.Length - 1 - i];
+                            path[path.Length - 1 - i] = Tmp;
                         }
 
                         break;
@@ -393,7 +406,7 @@ namespace Paz.Utility.PathFinding
                     CurrentNode = allNodes[BackCoord.y * width + BackCoord.x];
                     ReturnList.Add(CurrentNode);
                 }
-                while(!(BackCoord = backwardNodes[CurrentNode.Coord]).Equals(default));
+                while(!CurrentNode.Equals(startNode));
             }
 
             public void GetNeighboursQuick(NativeList<Vector2Int> ReturnList, NativeArray<Node> AllNodes, Vector2Int CurrentNode, int Width)
