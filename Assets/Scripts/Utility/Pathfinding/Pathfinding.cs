@@ -414,19 +414,19 @@ namespace Paz.Utility.PathFinding
                 int CurrIndex = CurrentNode.y * Width + CurrentNode.x;
                 int Max = AllNodes.Length - 1;
 
-                if (CurrIndex - Width > 0 && !AllNodes[CurrIndex - Width].isBlocker)
+                if (CurrentNode.y > 0 && !AllNodes[CurrIndex - Width].isBlocker)
                 {
                     ReturnList.Add(AllNodes[CurrIndex - Width]);
                 }
-                if (CurrIndex + Width <= Max && !AllNodes[CurrIndex + Width].isBlocker)
+                if (CurrentNode.y < Width - 1 && !AllNodes[CurrIndex + Width].isBlocker)
                 {
                     ReturnList.Add(AllNodes[CurrIndex + Width]);
                 }
-                if (CurrIndex != 0 && !AllNodes[CurrIndex - 1].isBlocker)
+                if (CurrentNode.x > 0 && !AllNodes[CurrIndex - 1].isBlocker)
                 {
                     ReturnList.Add(AllNodes[CurrIndex - 1]);
                 }
-                if (CurrIndex < Max && !AllNodes[CurrIndex + 1].isBlocker)
+                if (CurrentNode.x < Width - 1 && !AllNodes[CurrIndex + 1].isBlocker)
                 {
                     ReturnList.Add(AllNodes[CurrIndex + 1]);
                 }
