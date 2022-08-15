@@ -9,12 +9,15 @@ namespace Paz.Utility.PathFinding
     {
         public static class RandomBlockers
         {
-            public static NativeArray<Node> GenerateGrid(int GridWidth, ref Unity.Mathematics.Random Rand)
+            public static void GenerateGrid(NativeArray<Node> AllNodes, int GridWidth, ref Unity.Mathematics.Random Rand)
             {
                 int Width = GridWidth;
                 int Size = Width*Width;
 
-                NativeArray<Node> AllNodes = new NativeArray<Node>(GridWidth * GridWidth, Allocator.TempJob);
+                if(AllNodes.Length != GridWidth*GridWidth)
+                {
+                    throw new System.Exception(nameof(AllNodes) + " is an incorrect size!");
+                }
 
                 int StartIndex = 0; // UnityEngine.Random.Range(0, Pather.AllNodes.Length);
                 int EndIndex = AllNodes.Length - 1; // UnityEngine.Random.Range(0, Pather.AllNodes.Length);
@@ -26,8 +29,6 @@ namespace Paz.Utility.PathFinding
 
                     AllNodes[i] = NewNode;
                 }
-
-                return AllNodes;
             }
         }
 

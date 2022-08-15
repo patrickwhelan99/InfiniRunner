@@ -23,7 +23,8 @@ public class PathFindingTest
 
         // Generate a grid of 64x64 with random tiles blocked
         // Using a seed that we know produces a completable maze
-        NativeArray<Node> AllNodes = GridLayouts.RandomBlockers.GenerateGrid(GRID_WIDTH, ref Rand);
+        NativeArray<Node> AllNodes = new NativeArray<Node>();
+        GridLayouts.RandomBlockers.GenerateGrid(AllNodes, GRID_WIDTH, ref Rand);
 
         // Create our path finder
         var Back = new NativeParallelHashMap<Vector2Int, Vector2Int>(AllNodes.Length, Allocator.TempJob);
