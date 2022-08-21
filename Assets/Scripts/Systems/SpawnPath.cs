@@ -14,7 +14,7 @@ using Unity.Physics;
 using TMPro;
 
 [UpdateInGroup(typeof(VariableSystemGroupThreeSeconds))]
-[AlwaysUpdateSystem]
+// [AlwaysUpdateSystem]
 public partial class SpawnPath : SystemBase
 {
     EntityCommandBufferSystem ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
@@ -28,9 +28,7 @@ public partial class SpawnPath : SystemBase
 
     GameObject TextPrefab;
 
-    Vector3 playerSpawnPos;
-
-    Entity playerEnt;
+    NativeArray<Vector3> playerSpawnPos;
 
     protected override void OnCreate()
     {
@@ -42,15 +40,18 @@ public partial class SpawnPath : SystemBase
         LevelPrefabs[3] = PrefabConverter.Convert(Resources.Load<GameObject>("Prefabs/Level/Test/T"));
 
         TextPrefab = Resources.Load<GameObject>("Prefabs/Level/CoordNumsPrefab");
+
+        playerSpawnPos = new NativeArray<Vector3>(1, Allocator.Persistent);
     }
 
     protected override void OnStartRunning()
     {
         this.RegisterPhysicsRuntimeSystemReadWrite();
-        // CreatePath();
+        RequireSingletonForUpdate<PlayerTag>();
+        CreatePath();
     }
 
-    private void FindPathJob(NativeList<Vector2Int> Path, NativeArray<Node> AllNodes, NativeParallelHashMap<Vector2Int, Vector2Int> BackwardNodes, Vector2Int StartNode, Vector2Int EndNode)
+    private void FindPathJob(NativeList<Vector2Int> Path, NativeArray<Node> AllNodes, NativeParallelHashMap<Vector2Int, Vector2Int> BackwardNodes, NativeArray<Vector2Int> StartAndEndNodes, int StartNodeIndex = 0, int EndNodeIndex = 1)
     {
         var OpenSet = new NativeParallelHashSet<Node>(64, Allocator.TempJob);
         var VisualiserInstructionStack = new NativeList<(Vector2Int, Color)>(Allocator.Persistent);
@@ -61,10 +62,12 @@ public partial class SpawnPath : SystemBase
             backwardNodes = BackwardNodes,
             path = Path,
             openSet = OpenSet,
-            startNodeCoord = StartNode,
-            endNodeCoord = EndNode,
+            startAndEndNodes = StartAndEndNodes,
             heuristicWeight = 5.0f,
             width = GRID_WIDTH,
+
+            startNodeIndex = StartNodeIndex,
+            endNodeIndex = EndNodeIndex,
 
             visualiserInstructionStack = VisualiserInstructionStack
         };
@@ -73,7 +76,7 @@ public partial class SpawnPath : SystemBase
 
         OpenSet.Dispose(Dependency);
 
-        Dependency.Complete();
+        //Dependency.Complete();
 
         // PathFindingVisualiser Vis = new PathFindingVisualiser(GRID_WIDTH);
         // Vis.SetInstructions(VisualiserInstructionStack.ToArray());
@@ -84,7 +87,7 @@ public partial class SpawnPath : SystemBase
 
     private void CreatePath()
     {
-        uint Seed = (uint)new System.Random().Next();
+        uint Seed = (uint)new System.Random().Next(); // 1742882928u;
         Debug.Log($"Seed: {Seed}");
 
         Unity.Mathematics.Random Rand = new Unity.Mathematics.Random(Seed);
@@ -100,71 +103,67 @@ public partial class SpawnPath : SystemBase
         // Find a path through a random maze (max 5 attempts)
         NativeList<Vector2Int> Path = new NativeList<Vector2Int>(Allocator.TempJob);
 
-        FindPathJob(Path, AllNodes, BackwardNodes, Vector2Int.zero, new Vector2Int(GRID_WIDTH - 1, GRID_WIDTH - 1));
+        NativeArray<Vector2Int> StartAndEndNodes = new NativeArray<Vector2Int>(2, Allocator.TempJob);
+        StartAndEndNodes[0] = new Vector2Int(0, 0);
+        StartAndEndNodes[1] = new Vector2Int(GRID_WIDTH - 1, GRID_WIDTH - 1);
 
-        // We failed to find a path
-        while(Path.Length < 1)
+        FindPathJob(Path, AllNodes, BackwardNodes, StartAndEndNodes);
+
+        Dependency = Job.WithCode(() =>
         {
-            GridLayouts.RandomBlockers.GenerateGrid(AllNodes, GRID_WIDTH, ref Rand);
-
-            BackwardNodes.Dispose();
-            BackwardNodes = new NativeParallelHashMap<Vector2Int, Vector2Int>(AllNodes.Length, Allocator.TempJob);
-
-            Path.Dispose();
-            Path = new NativeList<Vector2Int>(Allocator.TempJob);
-
-            FindPathJob(Path, AllNodes, BackwardNodes, Vector2Int.zero, new Vector2Int(GRID_WIDTH - 1, GRID_WIDTH - 1));
-        }
-
-        playerSpawnPos = new Vector3(Path[0].x * REAL_WORLD_SCALE, 3.0f, Path[0].y * REAL_WORLD_SCALE);
-
-        for (int i = 0; i < Path.Length; i++)
-        {
-            int Index = AllNodes.GetNodeIndex(Path[i]);
-
-            BackwardNodes[Path[i]] = Node._defaultInvalid;
-            ForwardNodes.Remove(Path[i]);
-
-            ForwardNodes.Add(Path[i], i < Path.Length - 1 ? Path[i+1] : Node._defaultInvalid);
-        }
-
-        int Attempts = 0;
-        NativeList<Vector2Int> Branch = new NativeList<Vector2Int>(Allocator.TempJob);
-        
-        do
-        {
-            if(Branch.IsCreated)
+            if(Path.Length < 1)
             {
-                Branch.Dispose();
+                return;
             }
 
-            Branch = new NativeList<Vector2Int>(Allocator.TempJob);
-            FindPathBranch(Branch, AllNodes, ForwardNodes, BackwardNodes, Path, AllNodes.Where(x => x.isBlocker), ref Rand);
-        }
-        while(Branch.Length < 1 && Attempts++ < 10);
-        
+            for (int i = 0; i < Path.Length; i++)
+            {
+                int Index = AllNodes.GetNodeIndex(Path[i]);
 
-        //Node[][] Branches = FindPathBranches(10, AllNodes, Path, ref Rand);
+                BackwardNodes[Path[i]] = default;
+                ForwardNodes.Remove(Path[i]);
 
-        // Path = Path.Union(Branches.SelectMany(x => x)).Distinct().ToArray();
-
-
-        // DebugPath(Path, Branches);
+                ForwardNodes.Add(Path[i], i < Path.Length - 1 ? Path[i + 1] : default);
+            }
+        }).Schedule(Dependency);
 
 
-        //IEnumerable<Vector2Int> BranchPoints = Branches.Where(x => x.Length > 0).SelectMany(x => new Node[] {x.First(), x.Last()}).ToArray().Select(x => x.Coord);
+        NativeList<Vector2Int> Branch = new NativeList<Vector2Int>(Allocator.TempJob);
+        NativeList<Vector2Int> Blockers = new NativeList<Vector2Int>(Allocator.TempJob);
 
 
-        Vector2Int[] BranchPoints = Branch.Length > 0 ? new Vector2Int[]{Branch[0], Branch[Branch.Length - 1]} : new Vector2Int[0];
+        NativeArray<Vector2Int> KeyPoints = new NativeArray<Vector2Int>(3, Allocator.TempJob);
+
+        FindPathBranch(Branch, KeyPoints, AllNodes, ForwardNodes, BackwardNodes, Path, Blockers, ref Rand);
+
+
+        NativeList<Vector2Int> BranchPoints = new NativeList<Vector2Int>(0, Allocator.TempJob);
+        Dependency = Job.WithCode(() => 
+        {
+            if(Branch.Length > 0)
+            {
+                BranchPoints.Add(Branch[0]);
+                BranchPoints.Add(Branch[Branch.Length - 1]);
+            }
+        }).Schedule(Dependency);
+
 
         // Spawn the main path (excluding intersections)
-        SpawnPathParts(Path, BranchPoints, false);
+        // We don't want to pass anything in but using default gives an unitialiazed array error
+        NativeList<Vector2Int> MainPath = new NativeList<Vector2Int>(0, Allocator.TempJob);
+        SpawnPathParts(Path, BranchPoints, MainPath, false);
+
 
         // Spawn branches (including intersections)
-        if(Branch.Length > 0)
+        SpawnPathParts(Branch, BranchPoints, Path, true);
+
+
+        Dependency = new SetPlayerSpawnPosJob()
         {
-            SpawnPathParts(Branch, BranchPoints, true, Path);
-        }
+            Path = Path,
+            PlayerSpawnPos = playerSpawnPos
+        }.Schedule(Dependency);
+
 
 
         // Add coord numbers
@@ -175,6 +174,26 @@ public partial class SpawnPath : SystemBase
         Branch.Dispose(Dependency);
         ForwardNodes.Dispose(Dependency);
         BackwardNodes.Dispose(Dependency);
+        BranchPoints.Dispose(Dependency);
+        StartAndEndNodes.Dispose(Dependency);
+        MainPath.Dispose(Dependency);
+        Blockers.Dispose(Dependency);
+        KeyPoints.Dispose(Dependency);
+    }
+
+    struct SetPlayerSpawnPosJob : IJob
+    {
+        public NativeList<Vector2Int> Path;
+        public NativeArray<Vector3> PlayerSpawnPos;
+        public void Execute()
+        {
+            if(Path.Length < 1)
+            {
+                return;
+            }
+
+            PlayerSpawnPos[0] = new Vector3(Path[0].x * REAL_WORLD_SCALE, 3.0f, Path[0].y * REAL_WORLD_SCALE);
+        }
     }
 
     private void ShowDebugCoords(IEnumerable<Vector2Int> AllPathNodes)
@@ -192,16 +211,23 @@ public partial class SpawnPath : SystemBase
         }).Run();
     }
 
-    private void SpawnPathParts(NativeArray<Vector2Int> Path, IEnumerable<Vector2Int> BranchPoints, bool ProcessBranchPoints = true, NativeArray<Vector2Int> MainPath = default)
+    private void SpawnPathParts(NativeList<Vector2Int> Path, NativeList<Vector2Int> BranchPoints,  NativeList<Vector2Int> MainPath, bool ProcessBranchPoints = true)
     {
-        // Job #2 Spawn prefabs for each path tile
-        // IEnumerable<Node> PathNodesManaged = ProcessBranchPoints ? Path.Union(MainPath).ToArray() : Path.ToArray();
+        NativeList<Vector2Int> PathBranchPoints = new NativeList<Vector2Int>(0, Allocator.TempJob);
+        NativeList<Vector2Int> UnionOfPaths = new NativeList<Vector2Int>(0, Allocator.TempJob);
 
+        Dependency = Job.WithCode(() =>
+        {
+            PathBranchPoints.AddRange(BranchPoints);
+            UnionOfPaths.AddRange(Path);
 
-        // NativeArray<Vector2Int> PathPositions = new NativeArray<Vector2Int>(Path.Select(x => x.Coord).ToArray(), Allocator.Persistent);
-        NativeArray<Vector2Int> PathBranchPoints = new NativeArray<Vector2Int>(BranchPoints.ToArray(), Allocator.Persistent);
-
-        NativeArray<Vector2Int> UnionOfPaths = new NativeArray<Vector2Int>(Path.Union(MainPath).Distinct().ToArray(), Allocator.TempJob);
+            if(Path.Length > 0 && MainPath.Length > 0)
+            {
+                UnionOfPaths.RemoveAt(UnionOfPaths.Length - 1);
+                UnionOfPaths.AddRange(MainPath);
+            }
+            
+        }).Schedule(Dependency);
 
         SpawnPathSegments SpawnSegmentsJob = new SpawnPathSegments()
         {
@@ -214,148 +240,275 @@ public partial class SpawnPath : SystemBase
         };
 
         
-        SpawnSegmentsJob.Run(Path.Length);
-        // Dependency = SpawnSegmentsJob.Schedule(Path.Count(), 8, Dependency);
+        // SpawnSegmentsJob.Run(Path.Length);
+        Dependency = SpawnSegmentsJob.Schedule(Path, 8, Dependency);
 
-        // PathPositions.Dispose(Dependency);
+
         PathBranchPoints.Dispose(Dependency);
-
         UnionOfPaths.Dispose(Dependency);
     }
 
+    static SetupFindBranchJob job;
 
-    // struct FindPathBranchJob : IJob
-    // {
-    //     NativeArray<Node> AllNodes;
-    //     NativeParallelMultiHashMap<Vector2Int, Vector2Int> ForwardNodes;
-    //     NativeParallelHashMap<Vector2Int, Vector2Int> BackwardNodes;
-    //     NativeArray<Vector2Int> OriginalPath;
-    //     IEnumerable<Node> Blockers;
-    //     public void Execute()
-    //     {
-            
-    //     }
-    // }
-
-    void FindPathBranch(NativeList<Vector2Int> FullBranchPath, NativeArray<Node> AllNodes, NativeParallelMultiHashMap<Vector2Int, Vector2Int> ForwardNodes, NativeParallelHashMap<Vector2Int, Vector2Int> BackwardNodes, NativeArray<Vector2Int> OriginalPath, IEnumerable<Node> Blockers, ref Unity.Mathematics.Random Rand)
+    struct SetupFindBranchJob : IJob
     {
-        IEnumerable<Vector2Int> TrimmedPath = OriginalPath.Skip(3).SkipLast(3);
+        public NativeArray<Vector2Int> KeyPoints;
+        public NativeArray<Node> AllNodes;
+        public NativeList<Vector2Int> Blockers;
+        public NativeParallelHashMap<Vector2Int, Vector2Int> BackwardNodes;
+        public NativeArray<Unity.Mathematics.Random> Randoms;
 
-        // Select a node to branch from
-        Node StartNode = AllNodes.GetNodeQuick(TrimmedPath.Where(x => ForwardNodes.CountValuesForKey(x) < 3).ChooseRandom(ref Rand));
-
-        // Branch towards this point
-        Node TargetNode = AllNodes.GetNodeQuick(AllNodes.Except(OriginalPath.Select(x => AllNodes.GetNodeQuick(x))).Where(x => !x.isBlocker && Vector2Int.Distance(StartNode.Coord, x.Coord) < 10).ChooseRandom(ref Rand));
-
-        // Return to this point on the path
-        Node ReturnNode = AllNodes.GetNodeQuick(TrimmedPath.SkipWhile(x => !x.Equals(StartNode)).Where(x => Vector2Int.Distance(x, TargetNode.Coord) < 30 ).ChooseRandom(ref Rand));
-
-        AllNodes.ForEach(x => x.isBlocker = false);
-        AllNodes.ForEach(x => BackwardNodes[x] = Node._defaultInvalid);
-        AllNodes.Intersect(Blockers).ForEach(x => x.isBlocker = true);
+        [ReadOnly] public NativeList<Vector2Int> OriginalPath;
+        [ReadOnly] public NativeParallelMultiHashMap<Vector2Int, Vector2Int> ForwardNodes;
         
-        // Set all original path nodes as blockers
-        for (int i = 0; i < OriginalPath.Length; i++)
+        public void Execute()
         {
-            Node CopyOfNode = AllNodes.GetNodeQuick(OriginalPath[i]);
-            CopyOfNode.isBlocker = true;
-            AllNodes[AllNodes.GetNodeIndex(OriginalPath[i])] = CopyOfNode;
+            job = this;
+
+            Unity.Mathematics.Random Rand = Randoms[0];
+
+            AllNodes.Where(x => x.isBlocker).Select(x => x.Coord).ForEach(x => job.Blockers.Add(x));
+
+            
+            // START NODE
+            NativeList<Vector2Int> ValidStartNodes = new NativeList<Vector2Int>(Allocator.Temp);
+            for (int i = 3; i < OriginalPath.Length - 4; i++)
+            {
+                if(ForwardNodes.CountValuesForKey(OriginalPath[i]) < 3)
+                {
+                    ValidStartNodes.Add(OriginalPath[i]);
+                }
+            }
+
+            if(ValidStartNodes.Length < 1)
+            {
+                ValidStartNodes.Dispose();
+                KeyPoints[0] = new Vector2Int(-1, -1);
+                return;
+            }
+            
+            // Select a node to branch from
+            int NodeIndex = Rand.NextInt(ValidStartNodes.Length);
+            int StartNodeIndex = NodeIndex;
+            Node StartNode = AllNodes.GetNodeQuick(ValidStartNodes[NodeIndex]);
+
+
+
+            ValidStartNodes.Dispose();
+
+
+
+            // MIDDLE NODE
+
+            NativeParallelHashSet<Vector2Int> PathHashSet = new Unity.Collections.NativeParallelHashSet<Vector2Int>(OriginalPath.Length, Allocator.Temp);
+            for (int i = 0; i < OriginalPath.Length; i++)
+            {
+                PathHashSet.Add(OriginalPath[i]);
+            }
+
+            
+            NativeList<Vector2Int> NotInPath = new NativeList<Vector2Int>(AllNodes.Length - OriginalPath.Length, Allocator.Temp);
+            for (int i = 0; i < AllNodes.Length; i++)
+            {
+                if(!PathHashSet.Contains(AllNodes[i]))
+                {
+                    NotInPath.Add(AllNodes[i]);
+                }
+            }
+
+            if(NotInPath.Length < 1)
+            {
+                PathHashSet.Dispose();
+                NotInPath.Dispose();
+                KeyPoints[0] = new Vector2Int(-1, -1);
+                return;
+            }
+
+            // Branch towards this point
+            NodeIndex = Rand.NextInt(NotInPath.Length);
+            Node TargetNode = AllNodes.GetNodeQuick(NotInPath[NodeIndex]);
+
+
+            NotInPath.Dispose();
+            PathHashSet.Dispose();
+
+
+
+            // RETURN NODE
+
+            // Return to this point on the path
+            NativeList<Vector2Int> ValidReturnNodes = new NativeList<Vector2Int>(Allocator.Temp);
+            for (int i = StartNodeIndex; i < OriginalPath.Length; i++)
+            {
+                if(Vector2Int.Distance(TargetNode, OriginalPath[i]) < 30)
+                {
+                    ValidReturnNodes.Add(OriginalPath[i]);
+                }
+            }
+
+            if(ValidReturnNodes.Length < 1)
+            {
+                ValidReturnNodes.Dispose();
+                KeyPoints[0] = new Vector2Int(-1, -1);
+                return;
+            }
+
+            NodeIndex = Rand.NextInt(ValidReturnNodes.Length);
+            Node ReturnNode = AllNodes.GetNodeQuick(ValidReturnNodes[NodeIndex]);
+
+
+            ValidReturnNodes.Dispose();
+
+
+
+
+
+            AllNodes.ForEach(x => x.isBlocker = false);
+            AllNodes.ForEach(x => job.BackwardNodes[x] = Node._defaultInvalid);
+            for (int i = 0; i < Blockers.Length; i++)
+            {
+                Node x = AllNodes.GetNodeQuick(Blockers[i]);
+                x.isBlocker = false;
+                AllNodes[AllNodes.GetNodeIndex(Blockers[i])] = x;
+            }
+
+            // Set all original path nodes as blockers
+            for (int i = 0; i < OriginalPath.Length; i++)
+            {
+                Node CopyOfNode = AllNodes.GetNodeQuick(OriginalPath[i]);
+                CopyOfNode.isBlocker = true;
+                AllNodes[AllNodes.GetNodeIndex(OriginalPath[i])] = CopyOfNode;
+            }
+
+            Node NewStartNode = AllNodes.GetNodeQuick(StartNode);
+            NewStartNode.isBlocker = false;
+            AllNodes[AllNodes.GetNodeIndex(NewStartNode)] = NewStartNode;
+
+            Node NewTargetNode = AllNodes.GetNodeQuick(TargetNode);
+            NewTargetNode.isBlocker = false;
+            AllNodes[AllNodes.GetNodeIndex(NewTargetNode)] = NewTargetNode;
+
+            Node NewReturnNodeNode = AllNodes.GetNodeQuick(ReturnNode);
+            NewReturnNodeNode.isBlocker = false;
+            AllNodes[AllNodes.GetNodeIndex(NewReturnNodeNode)] = NewReturnNodeNode;
+
+
+            Randoms[0] = Rand;
+
+
+            KeyPoints[0] = StartNode;
+            KeyPoints[1] = TargetNode;
+            KeyPoints[2] = ReturnNode;
+
         }
+    }
 
-        Node NewStartNode = AllNodes.GetNodeQuick(StartNode);
-        NewStartNode.isBlocker = false;
-        AllNodes[AllNodes.GetNodeIndex(NewStartNode)] = NewStartNode;
+    void FindPathBranch(NativeList<Vector2Int> FullBranchPath, NativeArray<Vector2Int> KeyPoints, NativeArray<Node> AllNodes, NativeParallelMultiHashMap<Vector2Int, Vector2Int> ForwardNodes, NativeParallelHashMap<Vector2Int, Vector2Int> BackwardNodes, NativeList<Vector2Int> OriginalPath, NativeList<Vector2Int> Blockers, ref Unity.Mathematics.Random Rand)
+    {
+        NativeArray<Unity.Mathematics.Random> Randoms = new NativeArray<Unity.Mathematics.Random>(1, Allocator.TempJob);
+        Randoms[0] = Rand;
 
-        Node NewTargetNode = AllNodes.GetNodeQuick(TargetNode);
-        NewTargetNode.isBlocker = false;
-        AllNodes[AllNodes.GetNodeIndex(NewTargetNode)] = NewTargetNode;
+        SetupFindBranchJob SetupJob = new SetupFindBranchJob()
+        {
+            KeyPoints = KeyPoints,
+            AllNodes = AllNodes,
+            OriginalPath = OriginalPath,
+            Blockers = Blockers,
+            Randoms = Randoms,
+            ForwardNodes = ForwardNodes,
+            BackwardNodes = BackwardNodes,
+        };
 
-        Node NewReturnNodeNode = AllNodes.GetNodeQuick(ReturnNode);
-        NewReturnNodeNode.isBlocker = false;
-        AllNodes[AllNodes.GetNodeIndex(NewReturnNodeNode)] = NewReturnNodeNode;
+        Dependency = SetupJob.Schedule(Dependency);
 
-
-        
-
-        StartNode.isBlocker = false;
-        TargetNode.isBlocker = false;
-        ReturnNode.isBlocker = false;
+        // TODO ************* Assign random back before disposal
+        Randoms.Dispose(Dependency);
 
         // Find first half
-        // IEnumerable<Node> BranchPathFirstHalf = new AStar(AllNodes, StartNode, TargetNode).Execute();
         NativeList<Vector2Int> BranchPathFirstHalf = new NativeList<Vector2Int>(Allocator.TempJob);
-        FindPathJob(BranchPathFirstHalf, AllNodes, BackwardNodes, StartNode.Coord, TargetNode.Coord);
-        if(BranchPathFirstHalf.Length < 1)
-        {
-            BranchPathFirstHalf.Dispose();
-            return;
-        }
+        FindPathJob(BranchPathFirstHalf, AllNodes, BackwardNodes, KeyPoints);
 
-        // Block out the first half
-        for (int i = 0; i < BranchPathFirstHalf.Length; i++)
+        Dependency = Job.WithCode(() =>
         {
-            Node CopyOfNode = AllNodes.GetNodeQuick(BranchPathFirstHalf[i]);
-            CopyOfNode.isBlocker = true;
-            AllNodes[AllNodes.GetNodeIndex(BranchPathFirstHalf[i])] = CopyOfNode;
-        }
-        TargetNode.isBlocker = false;
+            if (BranchPathFirstHalf.Length < 1)
+            {
+                return;
+            }
+
+            // Block out the first half
+            for (int i = 0; i < BranchPathFirstHalf.Length; i++)
+            {
+                Node CopyOfNode = AllNodes.GetNodeQuick(BranchPathFirstHalf[i]);
+                CopyOfNode.isBlocker = true;
+                AllNodes[AllNodes.GetNodeIndex(BranchPathFirstHalf[i])] = CopyOfNode;
+            }
+
+            Node TargetNode = AllNodes.GetNodeQuick(KeyPoints[1]);
+            TargetNode.isBlocker = true;
+            AllNodes[AllNodes.GetNodeIndex(KeyPoints[1])] = TargetNode;
+
+        }).Schedule(Dependency);
+
 
         // Find second Half
         NativeList<Vector2Int> BranchPathSecondHalf = new NativeList<Vector2Int>(Allocator.TempJob);
-        FindPathJob(BranchPathSecondHalf, AllNodes, BackwardNodes, TargetNode.Coord, ReturnNode.Coord);
-        if(BranchPathSecondHalf.Length < 1)
+        FindPathJob(BranchPathSecondHalf, AllNodes, BackwardNodes, KeyPoints, 1, 2);
+
+        Dependency = Job.WithCode(() =>
         {
-            BranchPathFirstHalf.Dispose();
-            BranchPathSecondHalf.Dispose();
-            return;
-        }
-        
-        // Remove the target node from the first list to prevent duplicates
-        BranchPathFirstHalf.RemoveAt(BranchPathFirstHalf.Length - 1);
-
-        // Join the halves
-        Paz.Utility.Collections.NativeCollectionsUtilities.CombineNativeLists(FullBranchPath, BranchPathFirstHalf, BranchPathSecondHalf, Allocator.Persistent);
-
-        // Set branch in start node
-        ForwardNodes.Add(StartNode.Coord, FullBranchPath[1]);
-
-        // Set forward node in the rest of the path
-        for (int i = 1; i < FullBranchPath.Length; i++)
-        {
-            Vector2Int ForwardNode;
-            if(i < FullBranchPath.Length - 1 )
+            if (BranchPathFirstHalf.Length < 1 || BranchPathSecondHalf.Length < 1)
             {
-                ForwardNode = FullBranchPath[i+1];
+                return;
             }
-            else
+
+            // Remove the target node from the first list to prevent duplicates
+            BranchPathFirstHalf.RemoveAt(BranchPathFirstHalf.Length - 1);
+
+            // Join the halves
+            Paz.Utility.Collections.NativeCollectionsUtilities.CombineNativeLists(FullBranchPath, BranchPathFirstHalf, BranchPathSecondHalf, Allocator.Persistent);
+
+            // Set branch in start node
+            ForwardNodes.Add(KeyPoints[0], FullBranchPath[1]);
+
+            // Set forward node in the rest of the path
+            for (int i = 1; i < FullBranchPath.Length; i++)
             {
-                if(ForwardNodes.TryGetFirstValue(FullBranchPath[i], out Vector2Int Item, out _))
+                Vector2Int ForwardNode;
+                if (i < FullBranchPath.Length - 1)
                 {
-                    ForwardNode = Item;
+                    ForwardNode = FullBranchPath[i + 1];
                 }
                 else
                 {
-                    ForwardNode = Node._defaultInvalid;
+                    if (ForwardNodes.TryGetFirstValue(FullBranchPath[i], out Vector2Int Item, out _))
+                    {
+                        ForwardNode = Item;
+                    }
+                    else
+                    {
+                        ForwardNode = Node._defaultInvalid;
+                    }
                 }
+
+                ForwardNodes.Add(FullBranchPath[i], ForwardNode);
             }
+        }).Schedule(Dependency);
 
-            ForwardNodes.Add(FullBranchPath[i], ForwardNode);
-        }
 
-        BranchPathFirstHalf.Dispose();
-        BranchPathSecondHalf.Dispose();
+        BranchPathFirstHalf.Dispose(Dependency);
+        BranchPathSecondHalf.Dispose(Dependency);
     }
 
     protected override void OnUpdate()
     {    
-        EntityCommandBuffer.ParallelWriter Writer = ecbs.CreateCommandBuffer().AsParallelWriter();
+        // EntityCommandBuffer.ParallelWriter Writer = ecbs.CreateCommandBuffer().AsParallelWriter();
 
-        Dependency = Entities.WithAll<LevelTileTag>().ForEach((Entity E) => 
-        {
-            Writer.AddComponent(E.Index, E, new DestroyEntityTag());
-        }).ScheduleParallel(Dependency);
+        // Dependency = Entities.WithAll<LevelTileTag>().ForEach((Entity E) => 
+        // {
+        //     Writer.AddComponent(E.Index, E, new DestroyEntityTag());
+        // }).ScheduleParallel(Dependency);
 
-        CreatePath();
+        // CreatePath();
 
         // Dependency = Job.WithoutBurst().WithCode(() =>
         // {
@@ -365,18 +518,19 @@ public partial class SpawnPath : SystemBase
         // Dependency.Complete();
 
         
-        // playerEnt = GetSingletonEntity<PlayerTag>();
-        
+        Entity playerEnt = GetSingletonEntity<PlayerTag>();
 
-        // Job.WithBurst().WithCode(() => 
-        // {
-        //     EntityManager.SetComponentData(playerEnt, new PhysicsVelocity());
+        EntityManager.SetComponentData(playerEnt, new PhysicsVelocity());
 
-        //     EntityManager.SetComponentData(playerEnt, new Translation()
-        //     {
-        //         Value = playerSpawnPos
-        //     });
-        // }).Schedule(Dependency);        
+        EntityManager.SetComponentData(playerEnt, new Translation()
+        {
+            Value = playerSpawnPos[0]
+        });
+
+
+        playerSpawnPos.Dispose(Dependency);
+
+        this.Enabled = false;   
     }
 
     protected override void OnStopRunning()
@@ -388,18 +542,24 @@ public partial class SpawnPath : SystemBase
     }
 
     [BurstCompile]
-    public struct SpawnPathSegments : IJobParallelFor
+    public struct SpawnPathSegments : IJobParallelForDefer
     {
         public EntityCommandBuffer.ParallelWriter Writer;
         [ReadOnly] public NativeArray<Entity> Prefabs;
-        [ReadOnly] public NativeArray<Vector2Int> PathCoords;
-        [ReadOnly] public NativeArray<Vector2Int> BranchPoints;
-        [ReadOnly] public NativeArray<Vector2Int> UnionOfPathAndMainPath;
+        [ReadOnly] public NativeList<Vector2Int> PathCoords;
+        [ReadOnly] public NativeList<Vector2Int> BranchPoints;
+        [ReadOnly] public NativeList<Vector2Int> UnionOfPathAndMainPath;
         [ReadOnly] public bool DoBranchPoints;
 
         [BurstCompile]
         public void Execute(int index)
         {
+            if(DoBranchPoints && PathCoords.Length < 1)
+            {
+                return;
+            }
+
+
             if(!DoBranchPoints && BranchPoints.Contains(PathCoords[index]))
             {
                 return;

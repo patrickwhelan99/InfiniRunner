@@ -23,7 +23,7 @@ namespace Paz.Utility.PathFinding
         // Is this node traversable?
         public bool isBlocker;
 
-        public static Vector2Int _defaultInvalid = new Vector2Int(-1, -1);
+        public readonly static Vector2Int _defaultInvalid = new Vector2Int(-1, -1);
 
 
         public Node(Vector2Int Coordinates)
@@ -276,21 +276,28 @@ namespace Paz.Utility.PathFinding
             public NativeParallelHashMap<Vector2Int, Vector2Int> backwardNodes;
             public NativeList<Vector2Int> path;
             public NativeParallelHashSet<Node> openSet;
-            public Vector2Int startNodeCoord, endNodeCoord;
+            [ReadOnly] public NativeArray<Vector2Int> startAndEndNodes;
             Node startNode, currentNode, endNode;
-            public float heuristicWeight;
-            public int width;
+            [ReadOnly] public float heuristicWeight;
+            [ReadOnly] public int width;
+            [ReadOnly] public int startNodeIndex;
+            [ReadOnly] public int endNodeIndex;
 
             public NativeList<(Vector2Int, Color)> visualiserInstructionStack;
 
             [BurstCompile]
             public void Execute()
             {
+                if(startAndEndNodes[startNodeIndex] == new Vector2Int(-1, -1))
+                {
+                    return;
+                }
+
                 // Grid dimensions
                 width = allNodes[allNodes.Length - 1].Coord.x + 1;
 
-                startNode = allNodes.GetNodeQuick(startNodeCoord);
-                endNode = allNodes.GetNodeQuick(endNodeCoord);
+                startNode = allNodes.GetNodeQuick(startAndEndNodes[startNodeIndex]);
+                endNode = allNodes.GetNodeQuick(startAndEndNodes[endNodeIndex]);
 
                 // Set starting node's values
                 startNode.g = 0.0f;

@@ -31,14 +31,14 @@ public class PathFindingTest
         var Path = new NativeList<Vector2Int>(Allocator.TempJob);
         var Open = new NativeParallelHashSet<Node>(64, Allocator.TempJob);
         var Vis = new NativeList<(Vector2Int, Color)>(Allocator.TempJob);
+        var StartAndEndNodes = new NativeArray<Vector2Int>(new Vector2Int[]{Vector2Int.zero, new Vector2Int(GRID_WIDTH - 1, GRID_WIDTH - 1)}, Allocator.TempJob);
         AStar.AsJob PathFinder = new AStar.AsJob()
         {
             allNodes = AllNodes,
             backwardNodes = Back,
             path = Path,
             openSet = Open,
-            startNodeCoord = Vector2Int.zero, 
-            endNodeCoord = new Vector2Int(GRID_WIDTH - 1, GRID_WIDTH - 1),
+            
             heuristicWeight = 5.0f,
             width = GRID_WIDTH,
 
