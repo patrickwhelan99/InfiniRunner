@@ -17,7 +17,7 @@ using TMPro;
 // [AlwaysUpdateSystem]
 public partial class SpawnPath : SystemBase
 {
-    EntityCommandBufferSystem ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
+    EntityCommandBufferSystem Ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
 
     enum Direction {NONE, STRAIGHT, LEFT, RIGHT};
 
@@ -156,7 +156,7 @@ public partial class SpawnPath : SystemBase
             if(Branch.Length > 0)
             {
                 BranchPoints.Add(Branch[0]);
-                BranchPoints.Add(Branch[Branch.Length - 1]);
+                BranchPoints.Add(Branch[^1]);
             }
         }).Schedule(Dependency);
 
