@@ -44,6 +44,19 @@ public partial class SpawnPath : SystemBase
         playerSpawnPos = new NativeArray<Vector3>(1, Allocator.Persistent);
     }
 
+    protected override void OnDestroy()
+    {
+        if (LevelPrefabs.IsCreated)
+        {
+            LevelPrefabs.Dispose();
+        }
+
+        if (playerSpawnPos.IsCreated)
+        {
+            playerSpawnPos.Dispose();
+        }
+    }
+
     protected override void OnStartRunning()
     {
         this.RegisterPhysicsRuntimeSystemReadWrite();
