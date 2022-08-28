@@ -1,0 +1,8 @@
+root = true
+
+[*.cs]
+dotnet_diagnostic.IDE0090.severity = none
+dotnet_diagnostic.IDE0058.severity = none
+dotnet_diagnostic.IDE0034.severity = none
+dotnet_analyzer_diagnostic.category-Naming.severity = error
+dotnet_analyzer_diagnostic.category-Style.severity = error
