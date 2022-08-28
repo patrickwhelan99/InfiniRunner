@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using Unity.Collections;
 using UnityEngine;
 
@@ -12,9 +10,9 @@ namespace Paz.Utility.PathFinding
             public static void GenerateGrid(NativeArray<Node> AllNodes, int GridWidth, ref Unity.Mathematics.Random Rand)
             {
                 int Width = GridWidth;
-                int Size = Width*Width;
+                int Size = Width * Width;
 
-                if(AllNodes.Length != GridWidth*GridWidth)
+                if (AllNodes.Length != GridWidth * GridWidth)
                 {
                     throw new System.Exception(nameof(AllNodes) + " is an incorrect size!");
                 }
@@ -24,8 +22,10 @@ namespace Paz.Utility.PathFinding
 
                 for (int i = 0; i < Size; i++)
                 {
-                    Node NewNode = new Node(new Vector2Int(i % Width, i / Width));
-                    NewNode.isBlocker = i != StartIndex && i != EndIndex && Rand.NextInt(0, 4) == 0;
+                    Node NewNode = new Node(new Vector2Int(i % Width, i / Width))
+                    {
+                        isBlocker = i != StartIndex && i != EndIndex && Rand.NextInt(0, 4) == 0
+                    };
 
                     AllNodes[i] = NewNode;
                 }

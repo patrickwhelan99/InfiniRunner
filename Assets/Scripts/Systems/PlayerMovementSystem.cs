@@ -10,19 +10,18 @@ using UnityEngine;
 [UpdateAfter(typeof(BeginFixedStepSimulationEntityCommandBufferSystem))]
 public partial class PlayerMovementSystem : SystemBase
 {
-    EntityCommandBufferSystem ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
+    private EntityCommandBufferSystem Ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
 
 
-    Entity projectilePrefab;
+    private Entity projectilePrefab;
 
-    const float PLAYER_SPEED = 1.0f;
-    const float MAX_PLAYER_SPEED = 15.0f;
-    const float FIRING_COOLDOWN_TIME = 0.5f;
+    private const float PLAYER_SPEED = 1.0f;
+    private const float MAX_PLAYER_SPEED = 15.0f;
+    private const float FIRING_COOLDOWN_TIME = 0.5f;
 
-    double timeOfLastFireEvent;
-    double CurrentTime;
-
-    (KeyCode Key, float3 Direction)[] movementDirections = new (KeyCode, float3)[]
+    private double timeOfLastFireEvent;
+    private double CurrentTime;
+    private readonly (KeyCode Key, float3 Direction)[] movementDirections = new (KeyCode, float3)[]
     {
         (KeyCode.W, new float3(0.0f, 0.0f, 1.0f)),
         (KeyCode.S, new float3(0.0f, 0.0f, -1.0f)),
@@ -40,22 +39,22 @@ public partial class PlayerMovementSystem : SystemBase
     {
         CurrentTime = Time.ElapsedTime;
 
-        EntityCommandBuffer Ecb = ecbs.CreateCommandBuffer();
+        EntityCommandBuffer Ecb = Ecbs.CreateCommandBuffer();
 
-        Entities.WithoutBurst().WithAll<PlayerTag>().ForEach((ref PhysicsVelocity Velocity, ref Rotation Rot, in Translation Trans, in LocalToWorld TransformMatrix) => 
+        Entities.WithoutBurst().WithAll<PlayerTag>().ForEach((ref PhysicsVelocity Velocity, ref Rotation Rot, in Translation Trans, in LocalToWorld TransformMatrix) =>
         {
-            foreach ((KeyCode Key, float3 Direction) Tuple in movementDirections)
+            foreach ((KeyCode Key, float3 Direction) in movementDirections)
             {
-                if(Input.GetKey(Tuple.Key))
+                if (Input.GetKey(Key))
                 {
-                    float ResultantX = Velocity.Linear.x + Tuple.Direction.x * PLAYER_SPEED;
-                    float ResultantZ = Velocity.Linear.z + Tuple.Direction.z * PLAYER_SPEED;
+                    float ResultantX = Velocity.Linear.x + (Direction.x * PLAYER_SPEED);
+                    float ResultantZ = Velocity.Linear.z + (Direction.z * PLAYER_SPEED);
 
-                    if(math.abs(ResultantX) < MAX_PLAYER_SPEED)
+                    if (math.abs(ResultantX) < MAX_PLAYER_SPEED)
                     {
                         Velocity.Linear.x = ResultantX;
                     }
-                    if(math.abs(ResultantZ) < MAX_PLAYER_SPEED)
+                    if (math.abs(ResultantZ) < MAX_PLAYER_SPEED)
                     {
                         Velocity.Linear.z = ResultantZ;
                     }
@@ -72,9 +71,9 @@ public partial class PlayerMovementSystem : SystemBase
 
             Rot.Value = quaternion.LookRotation(Vector, TransformMatrix.Up);
 
-            if(Input.GetMouseButton(0) && CurrentTime - timeOfLastFireEvent > FIRING_COOLDOWN_TIME)
+            if (Input.GetMouseButton(0) && CurrentTime - timeOfLastFireEvent > FIRING_COOLDOWN_TIME)
             {
-                FireProjectileSystem.FireProjectile(projectilePrefab, TransformMatrix, 0);
+                FireProjectileSystem.FireProjectile(projectilePrefab, TransformMatrix);
                 timeOfLastFireEvent = CurrentTime;
             }
 

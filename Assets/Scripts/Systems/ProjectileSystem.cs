@@ -2,7 +2,6 @@ using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Jobs;
-using Unity.Mathematics;
 using Unity.Transforms;
 
 using Unity.Physics;
@@ -12,28 +11,11 @@ using Unity.Physics.Systems;
 public partial class ProjectileSystem : SystemBase
 {
     // Physics stuff
-    StepPhysicsWorld stepPhysicsWorld => World.GetExistingSystem<StepPhysicsWorld>();
-    BuildPhysicsWorld buildPhysicsWorld => World.GetExistingSystem<BuildPhysicsWorld>();
-    EntityCommandBufferSystem ecbs => World.GetOrCreateSystem<EndSimulationEntityCommandBufferSystem>();
-
-    EntityQuery ActiveProjectilesQuery;
-    EntityQuery PlayerQuery;
+    private StepPhysicsWorld StepPhysicsWorld => World.GetExistingSystem<StepPhysicsWorld>();
+    private EntityCommandBufferSystem Ecbs => World.GetOrCreateSystem<EndSimulationEntityCommandBufferSystem>();
 
 
-    const float PROJECTILE_SPEED = 0.33f;
-    const int PROJECTILE_CULL_DISTANCE = 150;
-
-    protected override void OnCreate()
-    {
-        EntityQueryDesc Desc = new EntityQueryDesc()
-        {
-            All = new ComponentType[] {typeof(ProjectileTag)},
-            None = new ComponentType[] {typeof(DestroyEntityTag)},
-        };
-
-        ActiveProjectilesQuery = EntityManager.CreateEntityQuery(Desc);
-        PlayerQuery = EntityManager.CreateEntityQuery(typeof(PlayerTag));
-    }
+    private const float PROJECTILE_SPEED = 0.33f;
 
 
     protected override void OnStartRunning()
@@ -41,7 +23,7 @@ public partial class ProjectileSystem : SystemBase
         this.RegisterPhysicsRuntimeSystemReadWrite();
     }
 
-    
+
     protected override void OnUpdate()
     {
         Dependency = Entities.WithAll<ProjectileTag>().WithNone<DestroyEntityTag>().ForEach((ref Translation Trans, in LocalToWorld Ltw) =>
@@ -51,12 +33,12 @@ public partial class ProjectileSystem : SystemBase
 
         CollisionEventJob CollisionJob = new CollisionEventJob()
         {
-            ecb = ecbs.CreateCommandBuffer(),
+            ecb = Ecbs.CreateCommandBuffer(),
             enemies = GetComponentDataFromEntity<EnemyTag>(true),
             projectiles = GetComponentDataFromEntity<ProjectileTag>(true),
             players = GetComponentDataFromEntity<PlayerTag>(true),
         };
-        Dependency = CollisionJob.Schedule(stepPhysicsWorld.Simulation, Dependency);
+        Dependency = CollisionJob.Schedule(StepPhysicsWorld.Simulation, Dependency);
 
         Dependency.Complete();
     }
@@ -80,12 +62,12 @@ public partial class ProjectileSystem : SystemBase
             Entity A = collisionEvent.EntityA;
             Entity B = collisionEvent.EntityB;
 
-            if(CollidingTypes(A, B, enemies, projectiles, out Entity Enemy, out Entity _, out EnemyTag _, out ProjectileTag _))
+            if (CollidingTypes(A, B, enemies, projectiles, out Entity Enemy, out Entity _, out EnemyTag _, out ProjectileTag _))
             {
                 ecb.AddComponent<DestroyEntityTag>(Enemy);
             }
 
-            if(CollidingTypes(A, B, enemies, players, out Entity _, out Entity Player, out EnemyTag _, out PlayerTag _))
+            if (CollidingTypes(A, B, enemies, players, out Entity _, out Entity Player, out EnemyTag _, out PlayerTag _))
             {
                 ecb.AddComponent<DestroyEntityTag>(Player);
             }
@@ -112,7 +94,7 @@ public partial class ProjectileSystem : SystemBase
             //     ecb.AddComponent<DestroyEntityTag>(0, Player);
             // }
 
-            if(players.HasComponent(collisionEvent.EntityA))
+            if (players.HasComponent(collisionEvent.EntityA))
             {
                 ecb.AddComponent<DestroyEntityTag>(0, collisionEvent.EntityA);
             }
@@ -124,63 +106,63 @@ public partial class ProjectileSystem : SystemBase
 
     #region collisionFunc
     [BurstCompile]
-    public static bool CollidingTypes<T1, T2>   (  
-                                                    Entity A, 
-                                                    Entity B, 
-                                                    ComponentDataFromEntity<T1> Type1, 
+    public static bool CollidingTypes<T1, T2>(
+                                                    Entity A,
+                                                    Entity B,
+                                                    ComponentDataFromEntity<T1> Type1,
                                                     ComponentDataFromEntity<T2> Type2,
                                                     out Entity entityOfType1,
                                                     out Entity entityOfType2,
                                                     out T1 outType1,
                                                     out T2 outType2
-                                                ) 
+                                                )
                                                 where T1 : struct, IComponentData
                                                 where T2 : struct, IComponentData
+    {
+
+        /*
+         *   BIT    |  MEANING 
+         * ---------------------
+         *   0      |  Collision occurred 
+         *   1      |  T1 is zero sized
+         *   2      |  T2 is zero sized
+         */
+        BitField32 collided = new BitField32();
+        collided.SetBits(0, false);
+
+
+        collided.SetBits(1, ComponentType.FromTypeIndex(TypeManager.GetTypeIndex<T1>()).IsZeroSized);
+        collided.SetBits(2, ComponentType.FromTypeIndex(TypeManager.GetTypeIndex<T2>()).IsZeroSized);
+
+        entityOfType1 = default(Entity);
+        entityOfType2 = default(Entity);
+        outType1 = default(T1);
+        outType2 = default(T2);
+
+        if (Type1.HasComponent(A) && Type2.HasComponent(B))
         {
+            entityOfType1 = A;
+            entityOfType2 = B;
 
-            /*
-             *   BIT    |  MEANING 
-             * ---------------------
-             *   0      |  Collision occurred 
-             *   1      |  T1 is zero sized
-             *   2      |  T2 is zero sized
-             */
-            BitField32 collided = new BitField32();
-            collided.SetBits(0, false);
+            outType1 = collided.GetBits(1) == 1 ? default(T1) : Type1[A];
+            outType2 = collided.GetBits(2) == 1 ? default(T2) : Type2[B];
 
-
-            collided.SetBits(1, ComponentType.FromTypeIndex(TypeManager.GetTypeIndex<T1>()).IsZeroSized);
-            collided.SetBits(2, ComponentType.FromTypeIndex(TypeManager.GetTypeIndex<T2>()).IsZeroSized);
-
-            entityOfType1 = default(Entity);
-            entityOfType2 = default(Entity);
-            outType1 = default(T1);
-            outType2 = default(T2);
-
-            if((Type1.HasComponent(A) && Type2.HasComponent(B)))
-            {
-                entityOfType1 = A;
-                entityOfType2 = B;
-
-                outType1 = collided.GetBits(1) == 1 ? default(T1) : Type1[A];
-                outType2 = collided.GetBits(2) == 1 ? default(T2) : Type2[B];
-
-                collided.SetBits(0, true);
-            }
-
-            if((Type1.HasComponent(B) && Type2.HasComponent(A)))
-            {
-                entityOfType1 = B;
-                entityOfType2 = A;
-
-                outType1 = collided.GetBits(1) == 1 ? default(T1) : Type1[B];
-                outType2 = collided.GetBits(2) == 1 ? default(T2) : Type2[A];
-
-                collided.SetBits(0, true);
-            }
-
-            return collided.GetBits(0) == 1;
+            collided.SetBits(0, true);
         }
 
-        #endregion
+        if (Type1.HasComponent(B) && Type2.HasComponent(A))
+        {
+            entityOfType1 = B;
+            entityOfType2 = A;
+
+            outType1 = collided.GetBits(1) == 1 ? default(T1) : Type1[B];
+            outType2 = collided.GetBits(2) == 1 ? default(T2) : Type2[A];
+
+            collided.SetBits(0, true);
+        }
+
+        return collided.GetBits(0) == 1;
+    }
+
+    #endregion
 }

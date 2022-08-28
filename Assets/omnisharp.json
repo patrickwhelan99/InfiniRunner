@@ -1,7 +1,7 @@
 {
     "FileOptions": 
     {
-        "SystemExcludeSearchPatterns": ["**/Packages/**", "**/Library/**"]
+        "ExcludeSearchPatterns": ["*, **/Packages/**", "**/Library/**"]
     },
 
     "FormattingOptions": 

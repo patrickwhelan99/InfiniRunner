@@ -1,8 +1,6 @@
-using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Jobs;
-using Unity.Mathematics;
 using Unity.Transforms;
 using UnityEngine;
 
@@ -11,11 +9,10 @@ using UnityEngine;
 [AlwaysUpdateSystem]
 public partial class FireProjectileSystem : SystemBase
 {
-    EntityCommandBufferSystem ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
-    static NativeStream events;
-    static NativeStream.Writer streamWriter;
-
-    NativeArray<FireProjectileEvent> EventsArray;
+    private EntityCommandBufferSystem Ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
+    private static NativeStream events;
+    private static NativeStream.Writer streamWriter;
+    private NativeArray<FireProjectileEvent> EventsArray;
 
     public struct FireProjectileEvent
     {
@@ -32,13 +29,13 @@ public partial class FireProjectileSystem : SystemBase
     protected override void OnUpdate()
     {
 
-        if(events.IsCreated && !events.IsEmpty())
+        if (events.IsCreated && !events.IsEmpty())
         {
             EventsArray = events.ToNativeArray<FireProjectileEvent>(Allocator.TempJob);
 
             Dependency = new ProcessEvents()
             {
-                Ecb = ecbs.CreateCommandBuffer().AsParallelWriter(),
+                Ecb = Ecbs.CreateCommandBuffer().AsParallelWriter(),
                 Events = EventsArray,
                 Time = (float)Time.ElapsedTime
             }.Schedule(EventsArray.Length, 1);
@@ -52,51 +49,51 @@ public partial class FireProjectileSystem : SystemBase
 
     protected override void OnDestroy()
     {
-        if(events.IsCreated)
+        if (events.IsCreated)
         {
             events.Dispose();
         }
 
-        if(EventsArray != null && EventsArray.IsCreated)
+        if (EventsArray != null && EventsArray.IsCreated)
         {
-           EventsArray.Dispose();
+            EventsArray.Dispose();
         }
     }
 
     public partial struct ProcessEvents : IJobParallelFor
     {
-       public EntityCommandBuffer.ParallelWriter Ecb;
-       [ReadOnly] public NativeArray<FireProjectileEvent> Events;
-       public float Time;
-       public void Execute(int index)
-       {
-           FireProjectileEvent Event = Events[index];
+        public EntityCommandBuffer.ParallelWriter Ecb;
+        [ReadOnly] public NativeArray<FireProjectileEvent> Events;
+        public float Time;
+        public void Execute(int index)
+        {
+            FireProjectileEvent Event = Events[index];
 
-           Entity FiredProjectile = Ecb.Instantiate(index, Event.Projectile);
+            Entity FiredProjectile = Ecb.Instantiate(index, Event.Projectile);
 
-           Rotation ProjectileRotation = new Rotation()
-           {
-               Value = Event.TransformMatrix.Rotation * Quaternion.Euler(90.0f, 0.0f, 0.0f)
-           };
-           Ecb.SetComponent<Rotation>(index, FiredProjectile, ProjectileRotation);
+            Rotation ProjectileRotation = new Rotation()
+            {
+                Value = Event.TransformMatrix.Rotation * Quaternion.Euler(90.0f, 0.0f, 0.0f)
+            };
+            Ecb.SetComponent(index, FiredProjectile, ProjectileRotation);
 
-           Translation ProjectileTranslation = new Translation()
-           {
-               Value = Event.TransformMatrix.Position + Event.TransformMatrix.Forward * 2.0f
-           };
-           Ecb.SetComponent<Translation>(index, FiredProjectile, ProjectileTranslation);
+            Translation ProjectileTranslation = new Translation()
+            {
+                Value = Event.TransformMatrix.Position + (Event.TransformMatrix.Forward * 2.0f)
+            };
+            Ecb.SetComponent(index, FiredProjectile, ProjectileTranslation);
 
-           Ecb.AddComponent(index, FiredProjectile, new DestroyEntityAfterTime()
-           {
-               TimeCreated = Time,
-               TimeToDestroy = Time + 3.0f
-           });
-       }
+            Ecb.AddComponent(index, FiredProjectile, new DestroyEntityAfterTime()
+            {
+                TimeCreated = Time,
+                TimeToDestroy = Time + 3.0f
+            });
+        }
     }
 
-    public static void FireProjectile(Entity Projectile, LocalToWorld TransformMatrix, int ThreadIndex)
+    public static void FireProjectile(Entity Projectile, LocalToWorld TransformMatrix)
     {
-        if(!events.IsCreated)
+        if (!events.IsCreated)
         {
             events = new NativeStream(1, Allocator.Persistent);
             streamWriter = events.AsWriter();

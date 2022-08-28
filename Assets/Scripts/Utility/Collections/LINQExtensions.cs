@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 
 using System.Linq;
@@ -33,16 +32,16 @@ public static class LINQExtensions
 
     public static int GetNodeIndex(this NativeArray<Node> Collection, UnityEngine.Vector2Int Coordinate)
     {
-        int Width = Collection[Collection.Length - 1].Coord.x + 1;
+        int Width = Collection[^1].Coord.x + 1;
 
-        return Coordinate.y * Width + Coordinate.x;
+        return (Coordinate.y * Width) + Coordinate.x;
     }
 
     public static Node GetNodeQuick(this NativeArray<Node> Collection, UnityEngine.Vector2Int Coordinate)
     {
-        int Width = Collection[Collection.Length - 1].Coord.x + 1;
+        int Width = Collection[^1].Coord.x + 1;
 
-        return Collection[Coordinate.y * Width + Coordinate.x];
+        return Collection[(Coordinate.y * Width) + Coordinate.x];
     }
 
 
@@ -55,11 +54,11 @@ public static class LINQExtensions
         NativeArray<T>.Enumerator Enumerator = Collection.GetEnumerator();
         NativeList<T> ReturnList = new NativeList<T>(Allocator.TempJob);
 
-        while(Enumerator.MoveNext())
+        while (Enumerator.MoveNext())
         {
             T Current = Enumerator.Current;
 
-            if(Predicate.Invoke(Current))
+            if (Predicate.Invoke(Current))
             {
                 ReturnList.Add(Current);
             }

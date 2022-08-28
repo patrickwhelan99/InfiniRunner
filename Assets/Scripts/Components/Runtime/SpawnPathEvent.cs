@@ -1,10 +1,10 @@
 using System;
-using Unity.Collections;
 using Unity.Entities;
-using Unity.Mathematics;
+using UnityEngine;
 
 [Serializable]
 public struct SpawnPathEvent : IComponentData
 {
     public int ChunkID;
+    public Vector2Int ChunkCoord;
 }

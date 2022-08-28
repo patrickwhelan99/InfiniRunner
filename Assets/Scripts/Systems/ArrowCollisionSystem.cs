@@ -1,25 +1,21 @@
-using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Jobs;
-using Unity.Mathematics;
 using Unity.Physics;
 using Unity.Physics.Systems;
-using Unity.Transforms;
 
 public partial class ArrowCollisionSystem : SystemBase
 {
-    static ArrowCollisionSystem instance;
+    private EntityCommandBufferSystem Ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
 
-
-    EntityCommandBufferSystem ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
+    public static ArrowCollisionSystem Instance { get; set; }
 
     public BuildPhysicsWorld buildPhysicsWorld;
     public StepPhysicsWorld stepPhysicsWorld;
 
     protected override void OnStartRunning()
     {
-        instance = this;
+        Instance = this;
 
         buildPhysicsWorld = World.GetExistingSystem<BuildPhysicsWorld>();
         stepPhysicsWorld = World.GetExistingSystem<StepPhysicsWorld>();
@@ -32,7 +28,7 @@ public partial class ArrowCollisionSystem : SystemBase
     {
         Dependency = new CollisionEventJob<ArrowTag, EnemyTag>()
         {
-            EntityCommandBuffer = ecbs.CreateCommandBuffer(),
+            EntityCommandBuffer = Ecbs.CreateCommandBuffer(),
             CurrentTime = (float)Time.ElapsedTime,
             Type1s = GetComponentDataFromEntity<ArrowTag>(),
             Type2s = GetComponentDataFromEntity<EnemyTag>()
@@ -41,8 +37,7 @@ public partial class ArrowCollisionSystem : SystemBase
         Dependency.Complete();
     }
 
-
-    partial struct CollisionEventJob<T1, T2> : ICollisionEventsJob  where T1 : struct, IComponentData
+    private partial struct CollisionEventJob<T1, T2> : ICollisionEventsJob where T1 : struct, IComponentData
                                                                     where T2 : struct, IComponentData
     {
         public EntityCommandBuffer EntityCommandBuffer;
@@ -55,7 +50,7 @@ public partial class ArrowCollisionSystem : SystemBase
 
         public void Execute(CollisionEvent collisionEvent)
         {
-            Entity[] CollidingEntities = new Entity[] {collisionEvent.EntityA, collisionEvent.EntityB};
+            Entity[] CollidingEntities = new Entity[] { collisionEvent.EntityA, collisionEvent.EntityB };
 
             for (int i = 0; i < CollidingEntities.Length; i++)
             {
@@ -64,7 +59,7 @@ public partial class ArrowCollisionSystem : SystemBase
                 ArrowCollided(E, EntityCommandBuffer, Type1s);
             }
 
-            if(CollidingTypes(collisionEvent.EntityA, collisionEvent.EntityB, Type1s, Type2s, out CollidingThings Result))
+            if (CollidingTypes(collisionEvent.EntityA, collisionEvent.EntityB, Type1s, Type2s, out CollidingThings Result))
             {
                 EntityCommandBuffer.AddComponent<DestroyEntityTag>(Result.entityOfType2);
             }
@@ -72,7 +67,7 @@ public partial class ArrowCollisionSystem : SystemBase
 
         private void ArrowCollided(Entity E, EntityCommandBuffer ECB, ComponentDataFromEntity<T1> ArrowTags)
         {
-            if(ArrowTags.HasComponent(E))
+            if (ArrowTags.HasComponent(E))
             {
                 ECB.RemoveComponent<PhysicsWorldIndex>(E);
 
@@ -96,15 +91,15 @@ public partial class ArrowCollisionSystem : SystemBase
             public T2 outType2;
         }
 
-        public bool CollidingTypes( Entity A, 
-                                            Entity B, 
-                                            ComponentDataFromEntity<T1> Type1,
-                                            ComponentDataFromEntity<T2> Type2,
-                                            out CollidingThings Result) 
-                                            
+        public bool CollidingTypes(Entity A,
+                                   Entity B,
+                                   ComponentDataFromEntity<T1> Type1,
+                                   ComponentDataFromEntity<T2> Type2,
+                                   out CollidingThings Result)
+
         {
             Result = new CollidingThings();
-            
+
 
             /*
              *   BIT    |  MEANING 
@@ -124,7 +119,7 @@ public partial class ArrowCollisionSystem : SystemBase
             Result.outType1 = default(T1);
             Result.outType2 = default(T2);
 
-            if((Type1.HasComponent(A) && Type2.HasComponent(B)))
+            if (Type1.HasComponent(A) && Type2.HasComponent(B))
             {
                 Result.entityOfType1 = A;
                 Result.entityOfType2 = B;
@@ -135,7 +130,7 @@ public partial class ArrowCollisionSystem : SystemBase
                 collided.SetBits(0, true);
             }
 
-            if((Type1.HasComponent(B) && Type2.HasComponent(A)))
+            if (Type1.HasComponent(B) && Type2.HasComponent(A))
             {
                 Result.entityOfType1 = B;
                 Result.entityOfType2 = A;

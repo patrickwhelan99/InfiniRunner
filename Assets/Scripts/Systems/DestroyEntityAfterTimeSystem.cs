@@ -1,18 +1,15 @@
-using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Jobs;
-using Unity.Mathematics;
-using Unity.Transforms;
 
 public partial class DestroyEntityAfterTimeSystem : SystemBase
 {
-    EntityCommandBufferSystem ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
+    private EntityCommandBufferSystem Ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
     protected override void OnUpdate()
     {
         Dependency = new DestroyAfterTime()
         {
-            writer = ecbs.CreateCommandBuffer().AsParallelWriter(),
+            writer = Ecbs.CreateCommandBuffer().AsParallelWriter(),
             currentTime = (float)Time.ElapsedTime
         }.ScheduleParallel();
     }
@@ -22,9 +19,9 @@ public partial class DestroyEntityAfterTimeSystem : SystemBase
         public EntityCommandBuffer.ParallelWriter writer;
         [ReadOnly]
         public float currentTime;
-        public void Execute([EntityInQueryIndex]int EntityIndex, Entity Entity, in DestroyEntityAfterTime DestroyEntity)
+        public void Execute([EntityInQueryIndex] int EntityIndex, Entity Entity, in DestroyEntityAfterTime DestroyEntity)
         {
-            if(currentTime >= DestroyEntity.TimeToDestroy)
+            if (currentTime >= DestroyEntity.TimeToDestroy)
             {
                 writer.RemoveComponent<DestroyEntityAfterTime>(EntityIndex, Entity);
                 writer.AddComponent<DestroyEntityTag>(EntityIndex, Entity);

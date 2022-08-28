@@ -1,7 +1,5 @@
 using System.Collections;
-using System.Collections.Generic;
 using NUnit.Framework;
-using UnityEngine;
 using UnityEngine.TestTools;
 using Unity.Entities;
 using Unity.Transforms;
@@ -16,7 +14,7 @@ public class FireProjectileTest : ECSTestsFixture
 
         // 'Fake' some data and fire our projectile
         Entity ToFire = System.EntityManager.CreateEntity(typeof(ProjectileTag));
-        FireProjectileSystem.FireProjectile(ToFire, new LocalToWorld(), 0);
+        FireProjectileSystem.FireProjectile(ToFire, new LocalToWorld());
 
         // Wait a frame for the projectile to be spawned
         yield return null;

@@ -1,6 +1,5 @@
 using Unity.Entities;
 using Unity.Jobs;
-using Unity.Burst;
 using Unity.Transforms;
 using Unity.Mathematics;
 using Unity.Physics;
@@ -11,15 +10,12 @@ using System.Linq;
 [UpdateInGroup(typeof(VariableSystemGroupThreeSeconds))]
 public partial class EntitySpawner : SystemBase
 {
-    EntityCommandBufferSystem ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
-    EntityCommandBuffer ecb;
+    private EntityCommandBufferSystem Ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
 
-    Entity enemyPrefab;
-    EntityQuery levelTilePieces;
+    private Entity enemyPrefab;
+    private EntityQuery levelTilePieces;
 
-    const int TO_SPAWN = 3;
-
-    double lastSpawnTime;
+    private const int TO_SPAWN = 3;
 
     protected override void OnCreate()
     {
@@ -45,7 +41,7 @@ public partial class EntitySpawner : SystemBase
 
         SpawnJob SpawnDudes = new SpawnJob()
         {
-            ParallelWriter = ecbs.CreateCommandBuffer().AsParallelWriter(),
+            ParallelWriter = Ecbs.CreateCommandBuffer().AsParallelWriter(),
             EntityPrefab = enemyPrefab,
             Randoms = RandomSystem.random,
 
@@ -53,14 +49,14 @@ public partial class EntitySpawner : SystemBase
         };
 
         Dependency = SpawnDudes.Schedule(TO_SPAWN, 1, Dependency);
-        
-        ecbs.AddJobHandleForProducer(Dependency);
+
+        Ecbs.AddJobHandleForProducer(Dependency);
         Dependency.Complete();
     }
 
 
     // [BurstCompile]
-    struct SpawnJob : IJobParallelFor
+    private struct SpawnJob : IJobParallelFor
     {
         public EntityCommandBuffer.ParallelWriter ParallelWriter;
         public Entity EntityPrefab;
@@ -71,20 +67,20 @@ public partial class EntitySpawner : SystemBase
         public float3 SpawnPos;
 
         [NativeDisableParallelForRestriction]
-        public NativeArray<Unity.Mathematics.Random> Randoms; 
+        public NativeArray<Random> Randoms;
 
         [Unity.Collections.LowLevel.Unsafe.NativeSetThreadIndex]
-        int threadIndex;
+        private readonly int threadIndex;
 
         // [BurstCompile]
         public void Execute(int index)
         {
-            Unity.Mathematics.Random Rand = Randoms[threadIndex];
+            Random Rand = Randoms[threadIndex];
 
             Entity SpawnedEntity = ParallelWriter.Instantiate(index, EntityPrefab);
 
 
-            ParallelWriter.SetComponent<Translation>(index, SpawnedEntity, new Translation() 
+            ParallelWriter.SetComponent(index, SpawnedEntity, new Translation()
             {
                 Value = SpawnPos + Rand.NextFloat3(5)
             });
@@ -99,7 +95,7 @@ public partial class EntitySpawner : SystemBase
 
     private static void SpawnDudesCallback(EntityCommandBuffer.ParallelWriter ParallelWriter, Entity SpawnedEntity, int Index)
     {
-        ParallelWriter.SetComponent<Translation>(Index, SpawnedEntity, new Translation() 
+        ParallelWriter.SetComponent(Index, SpawnedEntity, new Translation()
         {
             // Value = GetSpawnTranslationCircle(Rand, CircleCentre, Radius)
             Value = GetSpawnTranslationRect(Index, 10, new float3(-10.0f, 1.0f, -10.0f))
@@ -108,11 +104,9 @@ public partial class EntitySpawner : SystemBase
 
     private static float3 GetSpawnTranslationCircle(Random Rand, float3 CircleCentre, float Radius)
     {
-        Radius = Rand.NextFloat(30.0f, 50.0f);
-   
         float RandDegree = Rand.NextFloat(360.0f);
-        float RandX = CircleCentre.x + Radius * math.cos(RandDegree);
-        float RandZ = CircleCentre.z + Radius * math.sin(RandDegree);
+        float RandX = CircleCentre.x + (Radius * math.cos(RandDegree));
+        float RandZ = CircleCentre.z + (Radius * math.sin(RandDegree));
 
         return new float3(RandX, 0.0f, RandZ);
     }
