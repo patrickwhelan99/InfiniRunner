@@ -88,9 +88,11 @@ namespace Paz.Utility.PathFinding
 
         protected Texture2D GetFreshTexture(int Size)
         {
-            Texture2D Ret = new Texture2D(Size, Size, TextureFormat.RGB24, 2, true);
-            Ret.anisoLevel = 0;
-            Ret.filterMode = 0;
+            Texture2D Ret = new Texture2D(Size, Size, TextureFormat.RGB24, 2, true)
+            {
+                anisoLevel = 0,
+                filterMode = 0
+            };
 
             return Ret;
         }

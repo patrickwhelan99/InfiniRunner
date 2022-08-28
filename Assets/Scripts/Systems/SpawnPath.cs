@@ -22,13 +22,16 @@ public partial class SpawnPath : SystemBase
     enum Direction {NONE, STRAIGHT, LEFT, RIGHT};
 
     static readonly int REAL_WORLD_SCALE = 20;
-    static readonly int GRID_WIDTH = 64;
+    static readonly int GRID_WIDTH = 10;
 
     NativeArray<Entity> LevelPrefabs;
 
     GameObject TextPrefab;
 
     NativeArray<Vector3> playerSpawnPos;
+
+    Vector3Int spawnOffset;
+    int currentChunkID;
 
     protected override void OnCreate()
     {
@@ -59,9 +62,13 @@ public partial class SpawnPath : SystemBase
 
     protected override void OnStartRunning()
     {
-        this.RegisterPhysicsRuntimeSystemReadWrite();
-        RequireSingletonForUpdate<PlayerTag>();
-        CreatePath();
+        // this.RegisterPhysicsRuntimeSystemReadWrite();
+        // RequireSingletonForUpdate<PlayerTag>();
+
+        
+        // CreatePath();
+        // spawnOffset = new Vector3Int(GRID_WIDTH * REAL_WORLD_SCALE, 0, 0);
+        // CreatePath();
     }
 
     private void FindPathJob(NativeList<Vector2Int> Path, NativeArray<Node> AllNodes, NativeParallelHashMap<Vector2Int, Vector2Int> BackwardNodes, NativeArray<Vector2Int> StartAndEndNodes, int StartNodeIndex = 0, int EndNodeIndex = 1)
@@ -178,6 +185,19 @@ public partial class SpawnPath : SystemBase
         }.Schedule(Dependency);
 
 
+        // If we've failed to create a path, try again
+        EntityCommandBuffer.ParallelWriter Writer = Ecbs.CreateCommandBuffer().AsParallelWriter();
+        int CHID = currentChunkID;
+        Dependency = Job.WithCode(() =>
+        {
+            if(Path.Length < 1)
+            {
+                Entity E = Writer.CreateEntity(0);
+                Writer.AddComponent(1, E, new SpawnPathEvent() {ChunkID = CHID});
+            }
+        }).Schedule(Dependency);
+
+
 
         // Add coord numbers
         // ShowDebugCoords(Path.ToArray().Union(Branch.ToArray()).Distinct());
@@ -242,19 +262,22 @@ public partial class SpawnPath : SystemBase
             
         }).Schedule(Dependency);
 
-        SpawnPathSegments SpawnSegmentsJob = new SpawnPathSegments()
+
+        SpawnPathSegmentsJob SpawnSegmentsJob = new SpawnPathSegmentsJob()
         {
             Writer = World.GetOrCreateSystem<EntityCommandBufferSystem>().CreateCommandBuffer().AsParallelWriter(),
             Prefabs = LevelPrefabs,
             PathCoords = Path,
             BranchPoints = PathBranchPoints,
             UnionOfPathAndMainPath = UnionOfPaths,
-            DoBranchPoints = ProcessBranchPoints
+            DoBranchPoints = ProcessBranchPoints,
+
+            SpawnOffset = spawnOffset,
+            ThisChunkID = currentChunkID,
         };
 
-        
-        // SpawnSegmentsJob.Run(Path.Length);
         Dependency = SpawnSegmentsJob.Schedule(Path, 8, Dependency);
+
 
 
         PathBranchPoints.Dispose(Dependency);
@@ -478,7 +501,7 @@ public partial class SpawnPath : SystemBase
             BranchPathFirstHalf.RemoveAt(BranchPathFirstHalf.Length - 1);
 
             // Join the halves
-            Paz.Utility.Collections.NativeCollectionsUtilities.CombineNativeLists(FullBranchPath, BranchPathFirstHalf, BranchPathSecondHalf, Allocator.Persistent);
+            NativeCollectionsUtilities.CombineNativeLists(FullBranchPath, BranchPathFirstHalf, BranchPathSecondHalf, Allocator.Persistent);
 
             // Set branch in start node
             ForwardNodes.Add(KeyPoints[0], FullBranchPath[1]);
@@ -514,48 +537,41 @@ public partial class SpawnPath : SystemBase
 
     protected override void OnUpdate()
     {    
-        // EntityCommandBuffer.ParallelWriter Writer = ecbs.CreateCommandBuffer().AsParallelWriter();
+        EntityCommandBuffer.ParallelWriter Writer = Ecbs.CreateCommandBuffer().AsParallelWriter();
+        
+        Dependency = Entities.ForEach((Entity E, in SpawnPathEvent Event) => 
+        {
+            Writer.AddComponent(0, E, new DestroyEntityTag());
+        }).ScheduleParallel(Dependency);
 
-        // Dependency = Entities.WithAll<LevelTileTag>().ForEach((Entity E) => 
-        // {
-        //     Writer.AddComponent(E.Index, E, new DestroyEntityTag());
-        // }).ScheduleParallel(Dependency);
+        Dependency.Complete();
 
-        // CreatePath();
+        EntityQuery EventsQuery = EntityManager.CreateEntityQuery(typeof(SpawnPathEvent));
+        NativeArray<SpawnPathEvent> Events = EventsQuery.ToComponentDataArray<SpawnPathEvent>(Allocator.Temp);
 
-        // Dependency = Job.WithoutBurst().WithCode(() =>
-        // {
-        //     CreatePath();
-        // }).Schedule(Dependency);
-
-        // Dependency.Complete();
+        for (int i = 0; i < Events.Length; i++)
+        {
+            spawnOffset = new Vector3Int(Events[i].ChunkID * GRID_WIDTH * REAL_WORLD_SCALE, 0, 0);
+            currentChunkID = Events[i].ChunkID;
+            CreatePath();
+        }
 
         
-        Entity playerEnt = GetSingletonEntity<PlayerTag>();
+        // Entity playerEnt = GetSingletonEntity<PlayerTag>();
 
-        EntityManager.SetComponentData(playerEnt, new PhysicsVelocity());
+        // EntityManager.SetComponentData(playerEnt, new PhysicsVelocity());
 
-        EntityManager.SetComponentData(playerEnt, new Translation()
-        {
-            Value = playerSpawnPos[0]
-        });
+        // EntityManager.SetComponentData(playerEnt, new Translation()
+        // {
+        //     Value = playerSpawnPos[0]
+        // });
 
 
-        playerSpawnPos.Dispose(Dependency);
-
-        this.Enabled = false;   
+        
     }
 
-    protected override void OnStopRunning()
-    {
-        if(LevelPrefabs.IsCreated)
-        {
-            LevelPrefabs.Dispose();
-        }
-    }
 
-    [BurstCompile]
-    public struct SpawnPathSegments : IJobParallelForDefer
+    public struct SpawnPathSegmentsJob : IJobParallelForDefer
     {
         public EntityCommandBuffer.ParallelWriter Writer;
         [ReadOnly] public NativeArray<Entity> Prefabs;
@@ -563,8 +579,10 @@ public partial class SpawnPath : SystemBase
         [ReadOnly] public NativeList<Vector2Int> BranchPoints;
         [ReadOnly] public NativeList<Vector2Int> UnionOfPathAndMainPath;
         [ReadOnly] public bool DoBranchPoints;
+        [ReadOnly] public Vector3Int SpawnOffset;
+        [ReadOnly] public int ThisChunkID;
 
-        [BurstCompile]
+        [BurstDiscard]
         public void Execute(int index)
         {
             if(DoBranchPoints && PathCoords.Length < 1)
@@ -581,9 +599,9 @@ public partial class SpawnPath : SystemBase
 
             float3 SpawnPos = new float3()
             {
-                x = PathCoords[index].x * REAL_WORLD_SCALE,
+                x = SpawnOffset.x + PathCoords[index].x * REAL_WORLD_SCALE,
                 y = -2.0f,
-                z = PathCoords[index].y * REAL_WORLD_SCALE * -1.0f // so the graph is drawn from top left instead of bottom left
+                z = SpawnOffset.y + PathCoords[index].y * REAL_WORLD_SCALE * -1.0f // so the graph is drawn from top left instead of bottom left
             };
 
             
@@ -594,6 +612,8 @@ public partial class SpawnPath : SystemBase
             Entity SpawnedEntity = Writer.Instantiate(index, Prefabs[PrefabIndex]);
             Writer.SetComponent<Translation>(index, SpawnedEntity, new Translation() { Value = SpawnPos});
             Writer.SetComponent<Rotation>(index, SpawnedEntity, new Rotation() { Value = quaternion.LookRotation(Rotation, new float3(0, 1, 0))});
+
+            AddSharedComponent(index, SpawnedEntity);
         }
 
         [BurstCompile]
@@ -695,12 +715,20 @@ public partial class SpawnPath : SystemBase
 
             return Rotation;
         }
+
+        [BurstDiscard]
+        void AddSharedComponent(int index, Entity SpawnedEntity)
+        {
+            Writer.AddSharedComponent(index, SpawnedEntity, new ChunkSharedComponent() {ChunkID = ThisChunkID});
+        }
     }
+
+
 
     // private void TraverseNodes(Node Start, ref ObservableHashSet<Node> TraversedNodes)
     // {
     //     TraversedNodes.Add(Start);
-        
+
     //     for (int i = 0; i < Start.forwardNodes.Length; i++)
     //     {
     //         if(Start.forwardNodes[i] != null && !TraversedNodes.Contains(Start.forwardNodes[i]))
