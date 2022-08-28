@@ -79,7 +79,7 @@ namespace Paz.Utility.PathFinding
             [BurstCompile]
             public void Execute()
             {
-                if(startAndEndNodes[startNodeIndex] == new Vector2Int(-1, -1))
+                if(startAndEndNodes[0] == new Vector2Int(-1, -1))
                 {
                     return;
                 }
