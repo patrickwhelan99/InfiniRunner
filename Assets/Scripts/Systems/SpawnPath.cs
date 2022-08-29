@@ -21,16 +21,13 @@ public partial class SpawnPath : SystemBase
     private enum Direction { NONE, STRAIGHT, LEFT, RIGHT };
 
     private static readonly int REAL_WORLD_SCALE = 20;
-    private static readonly int GRID_WIDTH = 10;
+    public const int GRID_WIDTH = 10;
 
     private NativeArray<Entity> LevelPrefabs;
 
     private GameObject TextPrefab;
 
     private NativeArray<Vector3> playerSpawnPos;
-
-    private Vector3Int spawnOffset;
-    private int currentChunkID;
 
     protected override void OnCreate()
     {
@@ -102,7 +99,7 @@ public partial class SpawnPath : SystemBase
         VisualiserInstructionStack.Dispose(Dependency);
     }
 
-    private void CreatePath()
+    private void CreatePath(int CurrentChunkID, Vector3Int SpawnOffset, Vector2Int StartNode, Vector2Int EndNode)
     {
         uint Seed = (uint)new System.Random().Next(); // 1742882928u;
         // Debug.Log($"Seed: {Seed}");
@@ -121,8 +118,8 @@ public partial class SpawnPath : SystemBase
         NativeList<Vector2Int> Path = new NativeList<Vector2Int>(Allocator.TempJob);
 
         NativeArray<Vector2Int> StartAndEndNodes = new NativeArray<Vector2Int>(2, Allocator.TempJob);
-        StartAndEndNodes[0] = new Vector2Int(0, 0);
-        StartAndEndNodes[1] = new Vector2Int(GRID_WIDTH - 1, GRID_WIDTH - 1);
+        StartAndEndNodes[0] = StartNode;
+        StartAndEndNodes[1] = EndNode;
 
         FindPathJob(Path, AllNodes, BackwardNodes, StartAndEndNodes);
 
@@ -168,11 +165,11 @@ public partial class SpawnPath : SystemBase
         // Spawn the main path (excluding intersections)
         // We don't want to pass anything in but using default gives an unitialiazed array error
         NativeList<Vector2Int> MainPath = new NativeList<Vector2Int>(0, Allocator.TempJob);
-        SpawnPathParts(Path, BranchPoints, MainPath, false);
+        SpawnPathParts(CurrentChunkID, SpawnOffset, Path, BranchPoints, MainPath, false);
 
 
         // Spawn branches (including intersections)
-        SpawnPathParts(Branch, BranchPoints, Path, true);
+        SpawnPathParts(CurrentChunkID, SpawnOffset, Branch, BranchPoints, Path, true);
 
 
         Dependency = new SetPlayerSpawnPosJob()
@@ -184,13 +181,22 @@ public partial class SpawnPath : SystemBase
 
         // If we've failed to create a path, try again
         EntityCommandBuffer.ParallelWriter Writer = Ecbs.CreateCommandBuffer().AsParallelWriter();
-        int CHID = currentChunkID;
+        int CHID = CurrentChunkID;
+        Vector3Int Off = SpawnOffset;
         Dependency = Job.WithCode(() =>
         {
             if (Path.Length < 1)
             {
                 Entity E = Writer.CreateEntity(0);
-                Writer.AddComponent(1, E, new SpawnPathEvent() { ChunkID = CHID });
+                int x = Off.x / GRID_WIDTH / REAL_WORLD_SCALE;
+                int z = Off.z / GRID_WIDTH / REAL_WORLD_SCALE;
+                Writer.AddComponent(1, E, new SpawnPathEvent()
+                {
+                    ChunkID = CHID,
+                    ChunkCoord = new Vector2Int(x, z),
+                    StartNode = StartNode,
+                    EndNode = EndNode
+                });
             }
         }).Schedule(Dependency);
 
@@ -241,7 +247,7 @@ public partial class SpawnPath : SystemBase
         }).Run();
     }
 
-    private void SpawnPathParts(NativeList<Vector2Int> Path, NativeList<Vector2Int> BranchPoints, NativeList<Vector2Int> MainPath, bool ProcessBranchPoints = true)
+    private void SpawnPathParts(int CurrentChunkID, Vector3Int SpawnOffset, NativeList<Vector2Int> Path, NativeList<Vector2Int> BranchPoints, NativeList<Vector2Int> MainPath, bool ProcessBranchPoints = true)
     {
         NativeList<Vector2Int> PathBranchPoints = new NativeList<Vector2Int>(0, Allocator.TempJob);
         NativeList<Vector2Int> UnionOfPaths = new NativeList<Vector2Int>(0, Allocator.TempJob);
@@ -269,8 +275,8 @@ public partial class SpawnPath : SystemBase
             UnionOfPathAndMainPath = UnionOfPaths,
             DoBranchPoints = ProcessBranchPoints,
 
-            SpawnOffset = spawnOffset,
-            ThisChunkID = currentChunkID,
+            SpawnOffset = SpawnOffset,
+            ThisChunkID = CurrentChunkID,
         };
 
         Dependency = SpawnSegmentsJob.Schedule(Path, 8, Dependency);
@@ -534,6 +540,7 @@ public partial class SpawnPath : SystemBase
         Dependency = Entities.ForEach((Entity E, in SpawnPathEvent Event) =>
         {
             Writer.AddComponent(0, E, new DestroyEntityTag());
+            // Writer.DestroyEntity(0, E);
         }).ScheduleParallel(Dependency);
 
         Dependency.Complete();
@@ -543,9 +550,9 @@ public partial class SpawnPath : SystemBase
 
         for (int i = 0; i < Events.Length; i++)
         {
-            spawnOffset = new Vector3Int(Events[i].ChunkCoord.x * GRID_WIDTH * REAL_WORLD_SCALE, 0, Events[i].ChunkCoord.y * GRID_WIDTH * REAL_WORLD_SCALE);
-            currentChunkID = Events[i].ChunkID;
-            CreatePath();
+            Vector3Int SpawnOffset = new Vector3Int(Events[i].ChunkCoord.x * GRID_WIDTH * REAL_WORLD_SCALE, 0, Events[i].ChunkCoord.y * GRID_WIDTH * REAL_WORLD_SCALE);
+            int CurrentChunkID = Events[i].ChunkID;
+            CreatePath(CurrentChunkID, SpawnOffset, Events[i].StartNode, Events[i].EndNode);
         }
 
 

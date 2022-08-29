@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
 
-using Paz.Utility.Collections;
-
 namespace Paz.Utility.PathFinding
 {
     public class Visualiser
@@ -25,11 +23,14 @@ namespace Paz.Utility.PathFinding
             gridWidth = GridWidth;
 
             displayPrefab ??= Resources.Load("Prefabs/DisplaySearchPath") as GameObject;
-            displayObject ??= MonoBehaviour.Instantiate(displayPrefab);
+            displayObject ??= Object.Instantiate(displayPrefab);
             materialToUpdate = displayObject.GetComponent<Renderer>().material;
 
-            displayObject.transform.position = Camera.main.transform.position + new Vector3(0.0f, -1.0f, 0.0f);
-            Camera.main.orthographic = true;
+            if (Camera.main != null)
+            {
+                displayObject.transform.position = Camera.main.transform.position + new Vector3(0.0f, -1.0f, 0.0f);
+                Camera.main.orthographic = true;
+            }
         }
 
         public void SetInstructions(IEnumerable<(Vector2Int, Color)> Instructions)
@@ -42,9 +43,9 @@ namespace Paz.Utility.PathFinding
             playbackQueue.Enqueue(Instruction);
         }
 
-        public void Playback(IEnumerable<Node> AllNodes = null)
+        public void Playback(IEnumerable<Node> AllNodes = null, float DeltaTime = 0.001f)
         {
-            MonoBehaviour.FindObjectOfType<GameController>().StartCoroutine(PlaybackAsync(AllNodes));
+            Object.FindObjectOfType<GameController>().StartCoroutine(PlaybackAsync(AllNodes, DeltaTime));
         }
 
         protected virtual void SetupPlayback(IEnumerable<Node> AllNodes)
@@ -55,12 +56,12 @@ namespace Paz.Utility.PathFinding
             oldTexture = GetFreshTexture(gridWidth);
         }
 
-        protected IEnumerator PlaybackAsync(IEnumerable<Node> AllNodes)
+        protected IEnumerator PlaybackAsync(IEnumerable<Node> AllNodes, float DeltaTime)
         {
             SetupPlayback(AllNodes);
             (Vector2Int, Color) CurrentInstruction;
 
-            while(playbackQueue.Count > 0)
+            while (playbackQueue.Count > 0)
             {
                 CurrentInstruction = playbackQueue.Dequeue();
 
@@ -68,7 +69,7 @@ namespace Paz.Utility.PathFinding
 
                 Graphics.CopyTexture(displayTexture, oldTexture);
 
-                yield return new WaitForSeconds(0.001f);
+                yield return new WaitForSeconds(DeltaTime);
             }
         }
 
@@ -100,7 +101,7 @@ namespace Paz.Utility.PathFinding
         public void Update(Node CurrentNode, Node[] AllNodes, HashSet<Node> OpenSet, Node[] Neighbours)
         {
             int Size = (int)Mathf.Sqrt(AllNodes.Length);
-            
+
             displayTexture = new Texture2D(Size, Size, TextureFormat.RGB24, 2, true);
 
             for (int i = 0; i < AllNodes.Length; i++)
@@ -108,24 +109,24 @@ namespace Paz.Utility.PathFinding
                 Node ThisNode = AllNodes[i];
 
                 Color PixelColour = Color.white;
-                if(ThisNode.Equals(CurrentNode))
+                if (ThisNode.Equals(CurrentNode))
                 {
                     PixelColour = Color.red;
                 }
-                else if(Neighbours.Contains(ThisNode))
+                else if (Neighbours.Contains(ThisNode))
                 {
                     PixelColour = Color.green;
                 }
-                else if(OpenSet.Contains(ThisNode))
+                else if (OpenSet.Contains(ThisNode))
                 {
                     PixelColour = Color.blue;
                 }
-                else if(ThisNode.isBlocker)
+                else if (ThisNode.isBlocker)
                 {
                     PixelColour = Color.black;
                 }
 
-                displayTexture.SetPixel(Size - 1 - i % Size, i / Size, PixelColour);
+                displayTexture.SetPixel(Size - 1 - (i % Size), i / Size, PixelColour);
             }
 
 
@@ -140,7 +141,7 @@ namespace Paz.Utility.PathFinding
 
         public void SetPosition(Vector3 NewPos)
         {
-            if(displayObject != null)
+            if (displayObject != null)
             {
                 displayObject.transform.position = NewPos;
             }

@@ -1,12 +1,6 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using Unity.Jobs;
-using System.Linq;
 using Unity.Collections;
-
-
-using Paz.Utility.Collections;
 using Unity.Burst;
 
 namespace Paz.Utility.PathFinding
@@ -23,7 +17,7 @@ namespace Paz.Utility.PathFinding
         // Is this node traversable?
         public bool isBlocker;
 
-        public readonly static Vector2Int _defaultInvalid = new Vector2Int(-1, -1);
+        public static readonly Vector2Int _defaultInvalid = new Vector2Int(-1, -1);
 
 
         public Node(Vector2Int Coordinates)
@@ -68,7 +62,7 @@ namespace Paz.Utility.PathFinding
             public NativeList<Vector2Int> path;
             public NativeParallelHashSet<Node> openSet;
             [ReadOnly] public NativeArray<Vector2Int> startAndEndNodes;
-            Node startNode, currentNode, endNode;
+            private Node startNode, currentNode, endNode;
             [ReadOnly] public float heuristicWeight;
             [ReadOnly] public int width;
             [ReadOnly] public int startNodeIndex;
@@ -79,7 +73,7 @@ namespace Paz.Utility.PathFinding
             [BurstCompile]
             public void Execute()
             {
-                if(startAndEndNodes[0] == new Vector2Int(-1, -1))
+                if (startAndEndNodes[0] == new Vector2Int(-1, -1) || startAndEndNodes[startNodeIndex] == startAndEndNodes[endNodeIndex])
                 {
                     return;
                 }
@@ -137,7 +131,7 @@ namespace Paz.Utility.PathFinding
                     for (int i = 0; i < NeighboursCoords.Length; i++)
                     {
                         // NOTE: Node is a struct and therefore copy on fetch
-                        Node Neighbour = allNodes[NeighboursCoords[i].y * width + NeighboursCoords[i].x];
+                        Node Neighbour = allNodes[(NeighboursCoords[i].y * width) + NeighboursCoords[i].x];
 
                         // If the current route is quicker than the pre-existing route to this node
                         float NewlyCalculatedG = currentNode.g + Vector2Int.Distance(currentNode, Neighbour);
@@ -156,10 +150,10 @@ namespace Paz.Utility.PathFinding
 
                             openSet.Add(Neighbour);
                             visualiserInstructionStack.Add((Neighbour.Coord, Color.blue));
-                            
+
 
                             // Write back to the master array
-                            allNodes[NeighboursCoords[i].y * width + NeighboursCoords[i].x] = Neighbour;
+                            allNodes[(NeighboursCoords[i].y * width) + NeighboursCoords[i].x] = Neighbour;
                         }
                     }
 
@@ -185,12 +179,12 @@ namespace Paz.Utility.PathFinding
 
                 Node CurrentNode;
 
-                while(E.MoveNext())
+                while (E.MoveNext())
                 {
                     CurrentNode = E.Current;
                     LowestNode = CurrentNode.f < LowestNode.f ? CurrentNode : LowestNode;
                 }
-                
+
                 return LowestNode;
             }
 
@@ -203,15 +197,15 @@ namespace Paz.Utility.PathFinding
                 do
                 {
                     BackCoord = backwardNodes[CurrentNode.Coord];
-                    CurrentNode = allNodes[BackCoord.y * width + BackCoord.x];
+                    CurrentNode = allNodes[(BackCoord.y * width) + BackCoord.x];
                     ReturnList.Add(CurrentNode);
                 }
-                while(!CurrentNode.Equals(startNode));
+                while (!CurrentNode.Equals(startNode));
             }
 
             public void GetNeighboursQuick(NativeList<Vector2Int> ReturnList, NativeArray<Node> AllNodes, Vector2Int CurrentNode, int Width)
             {
-                int CurrIndex = CurrentNode.y * Width + CurrentNode.x;
+                int CurrIndex = (CurrentNode.y * Width) + CurrentNode.x;
 
                 if (CurrentNode.y > 0 && !AllNodes[CurrIndex - Width].isBlocker)
                 {

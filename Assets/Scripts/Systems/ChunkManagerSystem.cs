@@ -17,8 +17,11 @@ public partial class ChunkManagerSystem : SystemBase
     }
 
     private NativeQueue<Chunk> currentChunks = new NativeQueue<Chunk>(Allocator.Persistent);
-    private int newsestChunkID;
-    private Vector2Int newestChunkCoord;
+    private int newestChunkID;
+    private Vector2Int currentChunkCoord;
+    private Vector2Int nextChunkCoord;
+    private Vector2Int endNode;
+    private Chunk lastAdded;
     private Unity.Mathematics.Random random;
 
     private readonly Vector2Int[] Offsets = new Vector2Int[]
@@ -32,7 +35,12 @@ public partial class ChunkManagerSystem : SystemBase
     protected override void OnCreate()
     {
         random.InitState((uint)new System.Random().Next());
-        currentChunks.Enqueue(new Chunk());
+
+
+        // currentChunks.Enqueue(new Chunk());
+        // // Create an event for SpawnPath to listen for
+        // Entity SpawnPathEvent = EntityManager.CreateEntity(typeof(SpawnPathEvent));
+        // EntityManager.SetComponentData(SpawnPathEvent, new SpawnPathEvent() { ChunkID = newestChunkID, ChunkCoord = currentChunkCoord });
     }
     protected override void OnStartRunning()
     {
@@ -52,34 +60,46 @@ public partial class ChunkManagerSystem : SystemBase
 
     private void SpawnChunk()
     {
-        // Enqueue the new chunk
-        currentChunks.Enqueue(new Chunk()
-        {
-            ID = newsestChunkID,
-            Coord = newestChunkCoord
-        });
-
-        //Vector2Int OldChunkCoord = new Vector2Int(int.MaxValue, int.MaxValue);
-
         // Delete the oldest chunk
-        if (currentChunks.Count > 3)
+        if (currentChunks.Count > 2)
         {
             Chunk ChunkToDelete = currentChunks.Dequeue();
-            //OldChunkCoord = ChunkToDelete.Coord;
             DestroyChunk(ChunkToDelete.ID);
         }
+
+        Vector2Int Direction = nextChunkCoord - currentChunkCoord;
+        Vector2Int Start = newestChunkID > 0 ? GetOppositeEdgeNode(Direction, endNode, SpawnPath.GRID_WIDTH) : GetRandomEdgeNode(Direction, SpawnPath.GRID_WIDTH, ref random);
+
+        // Pick the direction of the next new chunk
+        currentChunkCoord = nextChunkCoord; // newestChunkID > 0 ? nextChunkCoord : newestChunkCoord + Offsets.Where(v => !(newestChunkCoord + v).Equals(currentChunks.Peek().Coord)).ChooseRandom(ref random);
+        newestChunkID++;
+
+        nextChunkCoord = currentChunkCoord + Offsets.Where(v => !(currentChunkCoord + v).Equals(lastAdded.Coord)).ChooseRandom(ref random);
+
+        // Enqueue the new chunk
+        lastAdded = new Chunk()
+        {
+            ID = newestChunkID,
+            Coord = currentChunkCoord
+        };
+
+        currentChunks.Enqueue(lastAdded);
+
 
 
         // Create an event for SpawnPath to listen for
         Entity SpawnPathEvent = EntityManager.CreateEntity(typeof(SpawnPathEvent));
-        EntityManager.SetComponentData(SpawnPathEvent, new SpawnPathEvent() { ChunkID = newsestChunkID, ChunkCoord = newestChunkCoord });
 
+        Direction = nextChunkCoord - currentChunkCoord;
+        Vector2Int End = endNode = GetRandomEdgeNode(Direction, SpawnPath.GRID_WIDTH, ref random);
 
-        // Pick the direction of the next new chunk
-        newestChunkCoord += Offsets.Where(x => !(newestChunkCoord + x).Equals(currentChunks.Peek())).ChooseRandom(ref random);
-        newsestChunkID++;
-
-        Debug.Log($"Old {currentChunks.Peek().Coord}\nNew {newestChunkCoord}");
+        EntityManager.SetComponentData(SpawnPathEvent, new SpawnPathEvent()
+        {
+            ChunkID = newestChunkID,
+            ChunkCoord = currentChunkCoord,
+            StartNode = Start,
+            EndNode = End,
+        });
     }
 
     private void DestroyChunk(int ChunkToDestroyID)
@@ -107,5 +127,24 @@ public partial class ChunkManagerSystem : SystemBase
                 Writer.DestroyEntity(i, PathSegments[i]);
             }
         }
+    }
+
+    public Vector2Int GetRandomEdgeNode(Vector2Int Direction, int GridWidth, ref Unity.Mathematics.Random Rand)
+    {
+        int RandomNum = Rand.NextInt(GridWidth);
+        return
+                Direction.Equals(Vector2Int.up) ? new Vector2Int(RandomNum, 0) :
+                Direction.Equals(Vector2Int.down) ? new Vector2Int(RandomNum, GridWidth - 1) :
+                Direction.Equals(Vector2Int.left) ? new Vector2Int(0, RandomNum) :
+                Direction.Equals(Vector2Int.right) ? new Vector2Int(GridWidth - 1, RandomNum) : default;
+    }
+
+    public Vector2Int GetOppositeEdgeNode(Vector2Int Direction, Vector2Int Node, int GridWidth)
+    {
+        return
+                Direction.Equals(Vector2Int.up) ? new Vector2Int(Node.x, GridWidth - 1) :
+                Direction.Equals(Vector2Int.down) ? new Vector2Int(Node.x, 0) :
+                Direction.Equals(Vector2Int.left) ? new Vector2Int(GridWidth - 1, Node.y) :
+                Direction.Equals(Vector2Int.right) ? new Vector2Int(0, Node.y) : default;
     }
 }
