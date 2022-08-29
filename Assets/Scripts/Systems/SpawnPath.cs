@@ -20,7 +20,7 @@ public partial class SpawnPath : SystemBase
 
     private enum Direction { NONE, STRAIGHT, LEFT, RIGHT };
 
-    private static readonly int REAL_WORLD_SCALE = 20;
+    public const int REAL_WORLD_SCALE = 20;
     public const int GRID_WIDTH = 10;
 
     private NativeArray<Entity> LevelPrefabs;
@@ -99,7 +99,7 @@ public partial class SpawnPath : SystemBase
         VisualiserInstructionStack.Dispose(Dependency);
     }
 
-    private void CreatePath(int CurrentChunkID, Vector3Int SpawnOffset, Vector2Int StartNode, Vector2Int EndNode)
+    private void CreatePath(SpawnPathEvent Event)
     {
         uint Seed = (uint)new System.Random().Next(); // 1742882928u;
         // Debug.Log($"Seed: {Seed}");
@@ -118,8 +118,8 @@ public partial class SpawnPath : SystemBase
         NativeList<Vector2Int> Path = new NativeList<Vector2Int>(Allocator.TempJob);
 
         NativeArray<Vector2Int> StartAndEndNodes = new NativeArray<Vector2Int>(2, Allocator.TempJob);
-        StartAndEndNodes[0] = StartNode;
-        StartAndEndNodes[1] = EndNode;
+        StartAndEndNodes[0] = Event.StartNode;
+        StartAndEndNodes[1] = Event.EndNode;
 
         FindPathJob(Path, AllNodes, BackwardNodes, StartAndEndNodes);
 
@@ -165,11 +165,11 @@ public partial class SpawnPath : SystemBase
         // Spawn the main path (excluding intersections)
         // We don't want to pass anything in but using default gives an unitialiazed array error
         NativeList<Vector2Int> MainPath = new NativeList<Vector2Int>(0, Allocator.TempJob);
-        SpawnPathParts(CurrentChunkID, SpawnOffset, Path, BranchPoints, MainPath, false);
+        SpawnPathParts(Event, Path, BranchPoints, MainPath, false);
 
 
         // Spawn branches (including intersections)
-        SpawnPathParts(CurrentChunkID, SpawnOffset, Branch, BranchPoints, Path, true);
+        SpawnPathParts(Event, Branch, BranchPoints, Path, true);
 
 
         Dependency = new SetPlayerSpawnPosJob()
@@ -181,22 +181,12 @@ public partial class SpawnPath : SystemBase
 
         // If we've failed to create a path, try again
         EntityCommandBuffer.ParallelWriter Writer = Ecbs.CreateCommandBuffer().AsParallelWriter();
-        int CHID = CurrentChunkID;
-        Vector3Int Off = SpawnOffset;
         Dependency = Job.WithCode(() =>
         {
             if (Path.Length < 1)
             {
                 Entity E = Writer.CreateEntity(0);
-                int x = Off.x / GRID_WIDTH / REAL_WORLD_SCALE;
-                int z = Off.z / GRID_WIDTH / REAL_WORLD_SCALE;
-                Writer.AddComponent(1, E, new SpawnPathEvent()
-                {
-                    ChunkID = CHID,
-                    ChunkCoord = new Vector2Int(x, z),
-                    StartNode = StartNode,
-                    EndNode = EndNode
-                });
+                Writer.AddComponent(1, E, Event);
             }
         }).Schedule(Dependency);
 
@@ -247,7 +237,7 @@ public partial class SpawnPath : SystemBase
         }).Run();
     }
 
-    private void SpawnPathParts(int CurrentChunkID, Vector3Int SpawnOffset, NativeList<Vector2Int> Path, NativeList<Vector2Int> BranchPoints, NativeList<Vector2Int> MainPath, bool ProcessBranchPoints = true)
+    private void SpawnPathParts(SpawnPathEvent Event, NativeList<Vector2Int> Path, NativeList<Vector2Int> BranchPoints, NativeList<Vector2Int> MainPath, bool ProcessBranchPoints = true)
     {
         NativeList<Vector2Int> PathBranchPoints = new NativeList<Vector2Int>(0, Allocator.TempJob);
         NativeList<Vector2Int> UnionOfPaths = new NativeList<Vector2Int>(0, Allocator.TempJob);
@@ -263,6 +253,14 @@ public partial class SpawnPath : SystemBase
                 UnionOfPaths.AddRange(MainPath);
             }
 
+            // Add adjacent chunk's nodes for the main path
+            if (!ProcessBranchPoints && Path.Length > 0)
+            {
+                Path.InsertRangeWithBeginEnd(0, 1);
+                Path[0] = new Node(Path[1] + new Vector2Int(Event.DirectionOfPreviousChunk.x, Event.DirectionOfPreviousChunk.y * -1));
+                Path.Add(new Node(Path[^1] - (Event.DirectionOfNextChunk * new Vector2Int(-1, 1))));
+            }
+
         }).Schedule(Dependency);
 
 
@@ -275,8 +273,12 @@ public partial class SpawnPath : SystemBase
             UnionOfPathAndMainPath = UnionOfPaths,
             DoBranchPoints = ProcessBranchPoints,
 
-            SpawnOffset = SpawnOffset,
-            ThisChunkID = CurrentChunkID,
+            SpawnOffset = new Vector3Int(Event.SpawnOffset.x, 0, Event.SpawnOffset.y),
+            ThisChunkID = Event.ChunkID,
+
+            // Only conscider the other chunks when creating the main path
+            DirectionOfPreviousChunk = ProcessBranchPoints ? Vector2Int.zero : Event.DirectionOfPreviousChunk,
+            DirectionOfNextChunk = ProcessBranchPoints ? Vector2Int.zero : Event.DirectionOfNextChunk
         };
 
         Dependency = SpawnSegmentsJob.Schedule(Path, 8, Dependency);
@@ -552,7 +554,7 @@ public partial class SpawnPath : SystemBase
         {
             Vector3Int SpawnOffset = new Vector3Int(Events[i].ChunkCoord.x * GRID_WIDTH * REAL_WORLD_SCALE, 0, Events[i].ChunkCoord.y * GRID_WIDTH * REAL_WORLD_SCALE);
             int CurrentChunkID = Events[i].ChunkID;
-            CreatePath(CurrentChunkID, SpawnOffset, Events[i].StartNode, Events[i].EndNode);
+            CreatePath(Events[i]);
         }
 
 
@@ -580,6 +582,8 @@ public partial class SpawnPath : SystemBase
         [ReadOnly] public bool DoBranchPoints;
         [ReadOnly] public Vector3Int SpawnOffset;
         [ReadOnly] public int ThisChunkID;
+        [ReadOnly] public Vector2Int DirectionOfPreviousChunk;
+        [ReadOnly] public Vector2Int DirectionOfNextChunk;
 
         [BurstDiscard]
         public void Execute(int index)
@@ -591,6 +595,14 @@ public partial class SpawnPath : SystemBase
 
 
             if (!DoBranchPoints && BranchPoints.Contains(PathCoords[index]))
+            {
+                return;
+            }
+
+            // For the main path we add the first nodes from adjacent chunks to the beginning and end of the list
+            // This makes the prefab spawning much easier, but we don't want to actually create prefabs for these
+            // Segments in different chunks
+            if (!DoBranchPoints && (index == 0 || index == PathCoords.Length - 1))
             {
                 return;
             }
@@ -662,7 +674,7 @@ public partial class SpawnPath : SystemBase
                 index++;
             }
 
-            // T
+            // T Junction
             if (PrefabIndex == 3)
             {
                 Vector2Int CurrentCoord = PathCoords[index];

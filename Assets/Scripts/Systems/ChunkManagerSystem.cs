@@ -35,12 +35,6 @@ public partial class ChunkManagerSystem : SystemBase
     protected override void OnCreate()
     {
         random.InitState((uint)new System.Random().Next());
-
-
-        // currentChunks.Enqueue(new Chunk());
-        // // Create an event for SpawnPath to listen for
-        // Entity SpawnPathEvent = EntityManager.CreateEntity(typeof(SpawnPathEvent));
-        // EntityManager.SetComponentData(SpawnPathEvent, new SpawnPathEvent() { ChunkID = newestChunkID, ChunkCoord = currentChunkCoord });
     }
     protected override void OnStartRunning()
     {
@@ -66,6 +60,8 @@ public partial class ChunkManagerSystem : SystemBase
             Chunk ChunkToDelete = currentChunks.Dequeue();
             DestroyChunk(ChunkToDelete.ID);
         }
+
+        Vector2Int DirPrevChunk = currentChunkCoord - nextChunkCoord;
 
         Vector2Int Direction = nextChunkCoord - currentChunkCoord;
         Vector2Int Start = newestChunkID > 0 ? GetOppositeEdgeNode(Direction, endNode, SpawnPath.GRID_WIDTH) : GetRandomEdgeNode(Direction, SpawnPath.GRID_WIDTH, ref random);
@@ -99,6 +95,8 @@ public partial class ChunkManagerSystem : SystemBase
             ChunkCoord = currentChunkCoord,
             StartNode = Start,
             EndNode = End,
+            DirectionOfPreviousChunk = DirPrevChunk,
+            DirectionOfNextChunk = Direction
         });
     }
 
