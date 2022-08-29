@@ -60,3 +60,11 @@ sysinfo.txt
 # Crashlytics generated file
 crashlytics-build.properties
 
+# UserSettings
+/[Uu]serSettings/
+
+# Mono crash logs
+mono_crash.mem*
+
+# Streaming Assets
+/Assets/[Ss]treamingAssets*
