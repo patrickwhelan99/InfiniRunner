@@ -2,10 +2,11 @@ using System.Linq;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Jobs;
+using Unity.Mathematics;
+using Unity.Transforms;
 using UnityEngine;
 
 [UpdateInGroup(typeof(ChunkSpawningVariableSystemGroup))]
-[AlwaysUpdateSystem]
 public partial class ChunkManagerSystem : SystemBase
 {
     private EntityCommandBufferSystem Ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
@@ -38,11 +39,47 @@ public partial class ChunkManagerSystem : SystemBase
     }
     protected override void OnStartRunning()
     {
-
+        RequireSingletonForUpdate<PlayerTag>();
     }
     protected override void OnUpdate()
     {
-        SpawnChunk();
+        Entity Player = GetSingletonEntity<PlayerTag>();
+        float3 PlayerTrans = GetComponentDataFromEntity<Translation>(true)[Player].Value;
+        Vector2Int PlayerPos = new Vector2Int((int)(PlayerTrans.x + 0.5f), (int)(PlayerTrans.z + 0.5f));
+
+        int ChunkPlayerInhabits = int.MaxValue;
+
+        NativeArray<Chunk> ChunksArray = currentChunks.ToArray(Allocator.Temp);
+
+        for (int i = 0; i < ChunksArray.Length; i++)
+        {
+            Vector2Int ChunkMin, ChunkMax;
+
+            int ChunkSize = SpawnPath.GRID_WIDTH * SpawnPath.REAL_WORLD_SCALE;
+
+            ChunkMin = new Vector2Int((ChunksArray[i].Coord.x * ChunkSize) - SpawnPath.REAL_WORLD_SCALE, (ChunksArray[i].Coord.y * ChunkSize) + SpawnPath.REAL_WORLD_SCALE);
+            ChunkMax = ChunkMin + new Vector2Int(ChunkSize, -ChunkSize);
+
+            if
+            (
+                PlayerPos.x < ChunkMax.x
+                && PlayerPos.x > ChunkMin.x
+                && PlayerPos.y > ChunkMax.y
+                && PlayerPos.y < ChunkMin.y
+            )
+            {
+                ChunkPlayerInhabits = i;
+                break;
+            }
+        }
+
+        // If the player is in the middle chunk
+        if (ChunkPlayerInhabits == 1 || ChunksArray.Length < 2)
+        {
+            SpawnChunk();
+        }
+
+        ChunksArray.Dispose();
     }
     protected override void OnDestroy()
     {
@@ -67,7 +104,7 @@ public partial class ChunkManagerSystem : SystemBase
         Vector2Int Start = newestChunkID > 0 ? GetOppositeEdgeNode(Direction, endNode, SpawnPath.GRID_WIDTH) : GetRandomEdgeNode(Direction, SpawnPath.GRID_WIDTH, ref random);
 
         // Pick the direction of the next new chunk
-        currentChunkCoord = nextChunkCoord; // newestChunkID > 0 ? nextChunkCoord : newestChunkCoord + Offsets.Where(v => !(newestChunkCoord + v).Equals(currentChunks.Peek().Coord)).ChooseRandom(ref random);
+        currentChunkCoord = nextChunkCoord;
         newestChunkID++;
 
         nextChunkCoord = currentChunkCoord + Offsets.Where(v => !(currentChunkCoord + v).Equals(lastAdded.Coord)).ChooseRandom(ref random);

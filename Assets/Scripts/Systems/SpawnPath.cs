@@ -258,10 +258,15 @@ public partial class SpawnPath : SystemBase
             }
 
             // Add adjacent chunk's nodes for the main path
-            if (Event.ChunkID != 1 && !ProcessBranchPoints && Path.Length > 0)
+            if (!ProcessBranchPoints && Path.Length > 0)
             {
-                Path.InsertRangeWithBeginEnd(0, 1);
-                Path[0] = new Node(Path[1] + new Vector2Int(Event.DirectionOfPreviousChunk.x, Event.DirectionOfPreviousChunk.y * -1));
+                // For the first chunk, we have no previous chunks to go on
+                if (Event.ChunkID != 1)
+                {
+                    Path.InsertRangeWithBeginEnd(0, 1);
+                    Path[0] = new Node(Path[1] + new Vector2Int(Event.DirectionOfPreviousChunk.x, Event.DirectionOfPreviousChunk.y * -1));
+                }
+
                 Path.Add(new Node(Path[^1] - (Event.DirectionOfNextChunk * new Vector2Int(-1, 1))));
             }
 
@@ -592,6 +597,10 @@ public partial class SpawnPath : SystemBase
             // For the main path we add the first nodes from adjacent chunks to the beginning and end of the list
             // This makes the prefab spawning much easier, but we don't want to actually create prefabs for these
             // Segments in different chunks
+            if (!DoBranchPoints && ThisChunkID == 1 && index == PathCoords.Length - 1)
+            {
+                return;
+            }
             if (!DoBranchPoints && (index == 0 || index == PathCoords.Length - 1) && ThisChunkID != 1)
             {
                 return;
