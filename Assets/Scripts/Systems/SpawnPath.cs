@@ -27,8 +27,6 @@ public partial class SpawnPath : SystemBase
 
     private GameObject TextPrefab;
 
-    private NativeArray<Vector3> playerSpawnPos;
-
     protected override void OnCreate()
     {
         LevelPrefabs = new NativeArray<Entity>(4, Allocator.Persistent);
@@ -39,8 +37,6 @@ public partial class SpawnPath : SystemBase
         LevelPrefabs[3] = PrefabConverter.Convert(Resources.Load<GameObject>("Prefabs/Level/Test/T"));
 
         TextPrefab = Resources.Load<GameObject>("Prefabs/Level/CoordNumsPrefab");
-
-        playerSpawnPos = new NativeArray<Vector3>(1, Allocator.Persistent);
     }
 
     protected override void OnDestroy()
@@ -49,20 +45,11 @@ public partial class SpawnPath : SystemBase
         {
             LevelPrefabs.Dispose();
         }
-
-        if (playerSpawnPos.IsCreated)
-        {
-            playerSpawnPos.Dispose();
-        }
     }
 
     protected override void OnStartRunning()
     {
-        // this.RegisterPhysicsRuntimeSystemReadWrite();
-        // RequireSingletonForUpdate<PlayerTag>();
-        // CreatePath();
-        // spawnOffset = new Vector3Int(GRID_WIDTH * REAL_WORLD_SCALE, 0, 0);
-        // CreatePath();
+
     }
 
     private void FindPathJob(NativeList<Vector2Int> Path, NativeArray<Node> AllNodes, NativeParallelHashMap<Vector2Int, Vector2Int> BackwardNodes, NativeArray<Vector2Int> StartAndEndNodes, int StartNodeIndex = 0, int EndNodeIndex = 1)
@@ -90,20 +77,12 @@ public partial class SpawnPath : SystemBase
 
         OpenSet.Dispose(Dependency);
 
-        //Dependency.Complete();
-
-        // PathFindingVisualiser Vis = new PathFindingVisualiser(GRID_WIDTH);
-        // Vis.SetInstructions(VisualiserInstructionStack.ToArray());
-        // Vis.Playback(AllNodes.ToArray());
-
         VisualiserInstructionStack.Dispose(Dependency);
     }
 
     private void CreatePath(SpawnPathEvent Event)
     {
-        uint Seed = (uint)new System.Random().Next(); // 1742882928u;
-        // Debug.Log($"Seed: {Seed}");
-
+        uint Seed = (uint)new System.Random().Next();
         Unity.Mathematics.Random Rand = new Unity.Mathematics.Random(Seed);
 
 
@@ -171,14 +150,6 @@ public partial class SpawnPath : SystemBase
         // Spawn branches (including intersections)
         SpawnPathParts(Event, Branch, BranchPoints, Path, true);
 
-
-        Dependency = new SetPlayerSpawnPosJob()
-        {
-            Path = Path,
-            PlayerSpawnPos = playerSpawnPos
-        }.Schedule(Dependency);
-
-
         // If we've failed to create a path, try again
         EntityCommandBuffer.ParallelWriter Writer = Ecbs.CreateCommandBuffer().AsParallelWriter();
         Dependency = Job.WithCode(() =>
@@ -191,6 +162,27 @@ public partial class SpawnPath : SystemBase
         }).Schedule(Dependency);
 
 
+        // Set player Pos
+        //Entity PlayerEnt = GetSingletonEntity<PlayerTag>();
+
+        //Dependency = Job.WithCode(() =>
+        //{
+        //    Writer.SetComponent(0, PlayerEnt, new PhysicsVelocity());
+
+        //    Writer.SetComponent(1, PlayerEnt, new Translation()
+        //    {
+        //        Value = new float3(Path[0].x * REAL_WORLD_SCALE, 3.0f, Path[0].y * REAL_WORLD_SCALE)
+        //    });
+        //}).Schedule(Dependency);
+
+        //PlayerSpawnPos.Dispose(Dependency);
+
+        EntityQuery PlayerQuery = EntityManager.CreateEntityQuery(typeof(PlayerTag));
+
+        Dependency = new SetPlayerSpawnPosJob()
+        {
+            Path = Path,
+        }.Schedule(PlayerQuery, Dependency);
 
         // Add coord numbers
         // ShowDebugCoords(Path.ToArray().Union(Branch.ToArray()).Distinct());
@@ -207,18 +199,17 @@ public partial class SpawnPath : SystemBase
         KeyPoints.Dispose(Dependency);
     }
 
-    private struct SetPlayerSpawnPosJob : IJob
+    private partial struct SetPlayerSpawnPosJob : IJobEntity
     {
-        public NativeList<Vector2Int> Path;
-        public NativeArray<Vector3> PlayerSpawnPos;
-        public void Execute()
+        [ReadOnly] public NativeList<Vector2Int> Path;
+        public void Execute(ref Translation Trans)
         {
             if (Path.Length < 1)
             {
                 return;
             }
 
-            PlayerSpawnPos[0] = new Vector3(Path[0].x * REAL_WORLD_SCALE, 3.0f, Path[0].y * REAL_WORLD_SCALE);
+            Trans = new Translation() { Value = new float3(Path[0].x * REAL_WORLD_SCALE, 3.0f, Path[0].y * REAL_WORLD_SCALE) };
         }
     }
 
@@ -542,7 +533,6 @@ public partial class SpawnPath : SystemBase
         Dependency = Entities.ForEach((Entity E, in SpawnPathEvent Event) =>
         {
             Writer.AddComponent(0, E, new DestroyEntityTag());
-            // Writer.DestroyEntity(0, E);
         }).ScheduleParallel(Dependency);
 
         Dependency.Complete();
@@ -556,19 +546,6 @@ public partial class SpawnPath : SystemBase
             int CurrentChunkID = Events[i].ChunkID;
             CreatePath(Events[i]);
         }
-
-
-        // Entity playerEnt = GetSingletonEntity<PlayerTag>();
-
-        // EntityManager.SetComponentData(playerEnt, new PhysicsVelocity());
-
-        // EntityManager.SetComponentData(playerEnt, new Translation()
-        // {
-        //     Value = playerSpawnPos[0]
-        // });
-
-
-
     }
 
 
