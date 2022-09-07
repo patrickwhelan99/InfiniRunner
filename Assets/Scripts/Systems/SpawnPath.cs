@@ -177,12 +177,16 @@ public partial class SpawnPath : SystemBase
 
         //PlayerSpawnPos.Dispose(Dependency);
 
-        EntityQuery PlayerQuery = EntityManager.CreateEntityQuery(typeof(PlayerTag));
-
-        Dependency = new SetPlayerSpawnPosJob()
+        if (Event.ChunkID == 1)
         {
-            Path = Path,
-        }.Schedule(PlayerQuery, Dependency);
+            EntityQuery PlayerQuery = EntityManager.CreateEntityQuery(typeof(PlayerTag));
+
+            Dependency = new SetPlayerSpawnPosJob()
+            {
+                Path = Path,
+                Offset = Event.SpawnOffset
+            }.Schedule(PlayerQuery, Dependency);
+        }
 
         // Add coord numbers
         // ShowDebugCoords(Path.ToArray().Union(Branch.ToArray()).Distinct());
@@ -202,6 +206,7 @@ public partial class SpawnPath : SystemBase
     private partial struct SetPlayerSpawnPosJob : IJobEntity
     {
         [ReadOnly] public NativeList<Vector2Int> Path;
+        [ReadOnly] public Vector2Int Offset;
         public void Execute(ref Translation Trans)
         {
             if (Path.Length < 1)
@@ -209,7 +214,15 @@ public partial class SpawnPath : SystemBase
                 return;
             }
 
-            Trans = new Translation() { Value = new float3(Path[0].x * REAL_WORLD_SCALE, 3.0f, Path[0].y * REAL_WORLD_SCALE) };
+            Trans = new Translation()
+            {
+                Value = new float3
+                (
+                    Offset.x + (Path[0].x * REAL_WORLD_SCALE),
+                    5.0f,
+                    Offset.y + (Path[0].y * -1 * REAL_WORLD_SCALE)
+                )
+            };
         }
     }
 
@@ -245,7 +258,7 @@ public partial class SpawnPath : SystemBase
             }
 
             // Add adjacent chunk's nodes for the main path
-            if (!ProcessBranchPoints && Path.Length > 0)
+            if (Event.ChunkID != 1 && !ProcessBranchPoints && Path.Length > 0)
             {
                 Path.InsertRangeWithBeginEnd(0, 1);
                 Path[0] = new Node(Path[1] + new Vector2Int(Event.DirectionOfPreviousChunk.x, Event.DirectionOfPreviousChunk.y * -1));
@@ -579,7 +592,7 @@ public partial class SpawnPath : SystemBase
             // For the main path we add the first nodes from adjacent chunks to the beginning and end of the list
             // This makes the prefab spawning much easier, but we don't want to actually create prefabs for these
             // Segments in different chunks
-            if (!DoBranchPoints && (index == 0 || index == PathCoords.Length - 1))
+            if (!DoBranchPoints && (index == 0 || index == PathCoords.Length - 1) && ThisChunkID != 1)
             {
                 return;
             }
@@ -593,14 +606,16 @@ public partial class SpawnPath : SystemBase
             };
 
 
+            // Get segment data
             bool Corner = IsCorner(PathCoords, index);
             int PrefabIndex = GetSegmentPrefab(PathCoords, BranchPoints, index, Corner);
             float3 Rotation = GetSegmentRotation(PathCoords, index, PrefabIndex);
 
+
+            // Write segment data
             Entity SpawnedEntity = Writer.Instantiate(index, Prefabs[PrefabIndex]);
             Writer.SetComponent(index, SpawnedEntity, new Translation() { Value = SpawnPos });
             Writer.SetComponent(index, SpawnedEntity, new Rotation() { Value = quaternion.LookRotation(Rotation, new float3(0, 1, 0)) });
-
             AddSharedComponent(index, SpawnedEntity);
         }
 
@@ -643,18 +658,18 @@ public partial class SpawnPath : SystemBase
         }
 
         [BurstCompile]
-        private float3 GetSegmentRotation(NativeArray<Vector2Int> PathCoords, int index, int PrefabIndex)
+        private float3 GetSegmentRotation(NativeArray<Vector2Int> PathCoords, int Index, int PrefabIndex)
         {
             float3 Rotation = new float3(0.0f, 0.0f, 1.0f);
-            if (PrefabIndex != 3 && index < 1)
+            if (PrefabIndex != 3 && Index < 1)
             {
-                index++;
+                Index++;
             }
 
             // T Junction
             if (PrefabIndex == 3)
             {
-                Vector2Int CurrentCoord = PathCoords[index];
+                Vector2Int CurrentCoord = PathCoords[Index];
 
                 NativeArray<Vector2Int> Neighbours = new NativeArray<Vector2Int>(4, Allocator.Temp);
                 Neighbours[0] = new Vector2Int(CurrentCoord.x, CurrentCoord.y - 1);
@@ -682,14 +697,14 @@ public partial class SpawnPath : SystemBase
             // Corner
             else if (PrefabIndex is 1 or 2)
             {
-                Vector2Int BeforeToThis = PathCoords[index] - PathCoords[index - 1];
+                Vector2Int BeforeToThis = PathCoords[Index] - PathCoords[Index - 1];
                 Rotation = new float3(BeforeToThis.x, 0.0f, -BeforeToThis.y);
                 return Rotation;
             }
             // Straight
             else if (PrefabIndex == 0)
             {
-                Vector2Int Difference = PathCoords[index] - PathCoords[index - 1];
+                Vector2Int Difference = PathCoords[Index] - PathCoords[Index - 1];
                 Rotation = new float3(math.abs(Difference.y), 0.0f, math.abs(Difference.x));
                 return Rotation;
             }
