@@ -4,7 +4,7 @@ on: [push, pull_request]
 
 jobs:
   build:
-    name: Build my project ✨
+    name: Build & Test 🔧
     runs-on: ubuntu-latest
     steps:
       # Checkout
@@ -17,9 +17,9 @@ jobs:
       - uses: actions/cache@v2
         with:
           path: Library
-          key: Library-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          key: Library-Key
           restore-keys: |
-            Library-
+            Library-Key
 
       # Test
       - name: Run tests
@@ -29,15 +29,22 @@ jobs:
         with:
           githubToken: ${{ secrets.GITHUB_TOKEN }}
 
+     # Test Coverage
+    - uses: actions/upload-artifact@v2
+      if: always()
+      with:
+        name: Coverage results
+        path: ${{ steps.myTestStep.outputs.coveragePath }}
+
       # Build
-#      - name: Build project
-#        uses: game-ci/unity-builder@v2
-#        env:
-#          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-#          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-#          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-#        with:
-#          targetPlatform: Linux
+      - name: Build project
+        uses: game-ci/unity-builder@v2
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: Linux
 
       # Output
       - uses: actions/upload-artifact@v2
