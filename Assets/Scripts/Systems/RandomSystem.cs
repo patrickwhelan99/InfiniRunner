@@ -1,15 +1,13 @@
-using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
-using Unity.Jobs;
 using Unity.Mathematics;
-using Unity.Transforms;
 
 public partial class RandomSystem : SystemBase
 {
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0001:Simplify Names", Justification = "3 Differnet Randoms exist")]
     public static NativeArray<Unity.Mathematics.Random> random;
-    const int MAX_THREADS = Unity.Jobs.LowLevel.Unsafe.JobsUtility.MaxJobThreadCount;
-    
+    private const int MAX_THREADS = Unity.Jobs.LowLevel.Unsafe.JobsUtility.MaxJobThreadCount;
+
     protected override void OnCreate()
     {
         random = new NativeArray<Random>(MAX_THREADS, Allocator.Persistent);
@@ -23,7 +21,7 @@ public partial class RandomSystem : SystemBase
 
     protected override void OnUpdate()
     {
-       
+
     }
 
     protected override void OnDestroy()
