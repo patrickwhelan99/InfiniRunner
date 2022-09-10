@@ -68,3 +68,6 @@ mono_crash.mem*
 
 # Streaming Assets
 /Assets/[Ss]treamingAssets*
+
+# Generated reports
+CodeCoverage
