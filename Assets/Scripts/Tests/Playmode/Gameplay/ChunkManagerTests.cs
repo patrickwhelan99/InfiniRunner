@@ -5,19 +5,6 @@ using UnityEngine.TestTools;
 
 public class ChunkManagerTests : ECSTestsFixture
 {
-    public ChunkManagerTests()
-    {
-        CreateDefaultWorld = true;
-    }
-
-    //[Test]
-    //public void ChunkManagerTestsSimplePasses()
-    //{
-
-    //}
-
-    // A UnityTest behaves like a coroutine in Play Mode. In Edit Mode you can use
-    // `yield return null;` to skip a frame.
     [UnityTest]
     public IEnumerator ChunkManagerTestsWithEnumeratorPasses()
     {
@@ -41,10 +28,4 @@ public class ChunkManagerTests : ECSTestsFixture
 
         Assert.That(Query.CalculateEntityCount() == 2);
     }
-
-    //[TearDown]
-    //public void TearDownWorld()
-    //{
-    //    base.TearDown();
-    //}
 }
