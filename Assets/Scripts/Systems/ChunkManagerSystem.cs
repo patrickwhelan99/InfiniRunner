@@ -11,7 +11,7 @@ public partial class ChunkManagerSystem : SystemBase
 {
     private EntityCommandBufferSystem Ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
 
-    private struct Chunk
+    public struct Chunk
     {
         public int ID;
         public Vector2Int Coord;
@@ -23,7 +23,7 @@ public partial class ChunkManagerSystem : SystemBase
     private Vector2Int nextChunkCoord;
     private Vector2Int endNode;
     private Chunk lastAdded;
-    private Unity.Mathematics.Random random;
+    private Unity.Mathematics.Random random = new Unity.Mathematics.Random();
 
     private readonly Vector2Int[] Offsets = new Vector2Int[]
     {
@@ -35,7 +35,7 @@ public partial class ChunkManagerSystem : SystemBase
 
     protected override void OnCreate()
     {
-        random.InitState((uint)new System.Random().Next());
+
     }
     protected override void OnStartRunning()
     {
@@ -43,38 +43,21 @@ public partial class ChunkManagerSystem : SystemBase
     }
     protected override void OnUpdate()
     {
+        if (random.state == 0u && SpawnPath.InitialRandomState != 0u)
+        {
+            random.InitState(SpawnPath.InitialRandomState);
+        }
+
+
         Entity Player = GetSingletonEntity<PlayerTag>();
         float3 PlayerTrans = GetComponentDataFromEntity<Translation>(true)[Player].Value;
-        Vector2Int PlayerPos = new Vector2Int((int)(PlayerTrans.x + 0.5f), (int)(PlayerTrans.z + 0.5f));
 
-        int ChunkPlayerInhabits = int.MaxValue;
+        Chunk ChunkPlayerInhabits = GetChunkFromPosition((int3)PlayerTrans);
 
         NativeArray<Chunk> ChunksArray = currentChunks.ToArray(Allocator.Temp);
 
-        for (int i = 0; i < ChunksArray.Length; i++)
-        {
-            Vector2Int ChunkMin, ChunkMax;
-
-            int ChunkSize = SpawnPath.GRID_WIDTH * SpawnPath.REAL_WORLD_SCALE;
-
-            ChunkMin = new Vector2Int((ChunksArray[i].Coord.x * ChunkSize) - SpawnPath.REAL_WORLD_SCALE, (ChunksArray[i].Coord.y * ChunkSize) + SpawnPath.REAL_WORLD_SCALE);
-            ChunkMax = ChunkMin + new Vector2Int(ChunkSize, -ChunkSize);
-
-            if
-            (
-                PlayerPos.x < ChunkMax.x
-                && PlayerPos.x > ChunkMin.x
-                && PlayerPos.y > ChunkMax.y
-                && PlayerPos.y < ChunkMin.y
-            )
-            {
-                ChunkPlayerInhabits = i;
-                break;
-            }
-        }
-
         // If the player is in the middle chunk
-        if (ChunkPlayerInhabits == 1 || ChunksArray.Length < 2)
+        if ((ChunksArray.Length > 1 && ChunksArray[1].ID == ChunkPlayerInhabits.ID) || currentChunks.Count < 2)
         {
             SpawnChunk();
         }
@@ -181,5 +164,38 @@ public partial class ChunkManagerSystem : SystemBase
                 Direction.Equals(Vector2Int.down) ? new Vector2Int(Node.x, 0) :
                 Direction.Equals(Vector2Int.left) ? new Vector2Int(GridWidth - 1, Node.y) :
                 Direction.Equals(Vector2Int.right) ? new Vector2Int(0, Node.y) : default;
+    }
+
+    public Chunk GetChunkFromPosition(int3 Position)
+    {
+        NativeArray<Chunk> ChunksArray = currentChunks.ToArray(Allocator.Temp);
+
+        for (int i = 0; i < ChunksArray.Length; i++)
+        {
+            Vector2Int ChunkMin, ChunkMax;
+
+            int ChunkSize = SpawnPath.GRID_WIDTH * SpawnPath.REAL_WORLD_SCALE;
+
+            ChunkMin = new Vector2Int((ChunksArray[i].Coord.x * ChunkSize) - (SpawnPath.REAL_WORLD_SCALE / 2), (ChunksArray[i].Coord.y * ChunkSize) + (SpawnPath.REAL_WORLD_SCALE / 2));
+            ChunkMax = ChunkMin + new Vector2Int(ChunkSize, -ChunkSize);
+
+            if
+            (
+                Position.x < ChunkMax.x &&
+                Position.x > ChunkMin.x &&
+                Position.y > ChunkMax.y &&
+                Position.y < ChunkMin.y
+            )
+            {
+                return ChunksArray[i];
+            }
+        }
+
+        Chunk ReturnChunk = new Chunk()
+        {
+            ID = -1
+        };
+
+        return ReturnChunk;
     }
 }

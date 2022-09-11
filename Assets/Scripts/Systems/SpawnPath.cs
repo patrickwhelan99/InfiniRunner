@@ -27,6 +27,10 @@ public partial class SpawnPath : SystemBase
 
     private GameObject TextPrefab;
 
+    public static uint InitialRandomState { get; private set; } = 0u;
+
+    private Unity.Mathematics.Random GameSeeder = new Unity.Mathematics.Random();
+
     protected override void OnCreate()
     {
         LevelPrefabs = new NativeArray<Entity>(4, Allocator.Persistent);
@@ -37,6 +41,10 @@ public partial class SpawnPath : SystemBase
         LevelPrefabs[3] = PrefabConverter.Convert(Resources.Load<GameObject>("Prefabs/Level/Test/T"));
 
         TextPrefab = Resources.Load<GameObject>("Prefabs/Level/CoordNumsPrefab");
+
+        InitialRandomState = 655220412u; // (uint)new System.Random().Next();
+        Debug.Log(InitialRandomState);
+        GameSeeder.InitState(InitialRandomState);
     }
 
     protected override void OnDestroy()
@@ -82,8 +90,7 @@ public partial class SpawnPath : SystemBase
 
     private void CreatePath(SpawnPathEvent Event)
     {
-        uint Seed = (uint)new System.Random().Next();
-        Unity.Mathematics.Random Rand = new Unity.Mathematics.Random(Seed);
+        Unity.Mathematics.Random Rand = new Unity.Mathematics.Random(GameSeeder.NextUInt());
 
 
         NativeArray<Node> AllNodes = new NativeArray<Node>(GRID_WIDTH * GRID_WIDTH, Allocator.TempJob);
@@ -121,16 +128,28 @@ public partial class SpawnPath : SystemBase
         }).Schedule(Dependency);
 
 
+        NativeList<Vector2Int> BranchPoints = new NativeList<Vector2Int>(0, Allocator.TempJob);
+
+
         NativeList<Vector2Int> Branch = new NativeList<Vector2Int>(Allocator.TempJob);
         NativeList<Vector2Int> Blockers = new NativeList<Vector2Int>(Allocator.TempJob);
 
-
         NativeArray<Vector2Int> KeyPoints = new NativeArray<Vector2Int>(3, Allocator.TempJob);
 
-        FindPathBranch(Branch, KeyPoints, AllNodes, ForwardNodes, BackwardNodes, Path, Blockers, ref Rand);
+        NativeArray<Vector2Int> PenultimateNodes = new NativeArray<Vector2Int>(4, Allocator.TempJob);
 
+        NativeArray<Unity.Mathematics.Random> Randoms = new NativeArray<Unity.Mathematics.Random>(1, Allocator.TempJob);
+        Randoms[0] = Rand;
 
-        NativeList<Vector2Int> BranchPoints = new NativeList<Vector2Int>(0, Allocator.TempJob);
+        FindPathBranch(Branch, KeyPoints, AllNodes, ForwardNodes, BackwardNodes, Path, Blockers, PenultimateNodes, Randoms);
+
+        Dependency = Job.WithCode(() =>
+        {
+            Rand = Randoms[0];
+        }).Schedule(Dependency);
+
+        Randoms.Dispose(Dependency);
+
         Dependency = Job.WithCode(() =>
         {
             if (Branch.Length > 0)
@@ -140,15 +159,19 @@ public partial class SpawnPath : SystemBase
             }
         }).Schedule(Dependency);
 
+        // Spawn branches (including intersections)
+        SpawnPathParts(Event, Branch, BranchPoints, Path, PenultimateNodes, true);
+
+        Blockers.Dispose(Dependency);
+        KeyPoints.Dispose(Dependency);
 
         // Spawn the main path (excluding intersections)
         // We don't want to pass anything in but using default gives an unitialiazed array error
         NativeList<Vector2Int> MainPath = new NativeList<Vector2Int>(0, Allocator.TempJob);
-        SpawnPathParts(Event, Path, BranchPoints, MainPath, false);
+        SpawnPathParts(Event, Path, BranchPoints, MainPath, PenultimateNodes, false);
 
 
-        // Spawn branches (including intersections)
-        SpawnPathParts(Event, Branch, BranchPoints, Path, true);
+
 
         // If we've failed to create a path, try again
         EntityCommandBuffer.ParallelWriter Writer = Ecbs.CreateCommandBuffer().AsParallelWriter();
@@ -161,22 +184,6 @@ public partial class SpawnPath : SystemBase
             }
         }).Schedule(Dependency);
 
-
-        // Set player Pos
-        //Entity PlayerEnt = GetSingletonEntity<PlayerTag>();
-
-        //Dependency = Job.WithCode(() =>
-        //{
-        //    Writer.SetComponent(0, PlayerEnt, new PhysicsVelocity());
-
-        //    Writer.SetComponent(1, PlayerEnt, new Translation()
-        //    {
-        //        Value = new float3(Path[0].x * REAL_WORLD_SCALE, 3.0f, Path[0].y * REAL_WORLD_SCALE)
-        //    });
-        //}).Schedule(Dependency);
-
-        //PlayerSpawnPos.Dispose(Dependency);
-
         if (Event.ChunkID == 1)
         {
             EntityQuery PlayerQuery = EntityManager.CreateEntityQuery(typeof(PlayerTag));
@@ -188,19 +195,21 @@ public partial class SpawnPath : SystemBase
             }.Schedule(PlayerQuery, Dependency);
         }
 
+
+        Dependency.Complete();
+
         // Add coord numbers
-        // ShowDebugCoords(Path.ToArray().Union(Branch.ToArray()).Distinct());
+        ShowDebugCoords(Path.ToArray().Union(Branch.ToArray()).Distinct());
 
         AllNodes.Dispose(Dependency);
         Path.Dispose(Dependency);
-        Branch.Dispose(Dependency);
         ForwardNodes.Dispose(Dependency);
         BackwardNodes.Dispose(Dependency);
         BranchPoints.Dispose(Dependency);
         StartAndEndNodes.Dispose(Dependency);
         MainPath.Dispose(Dependency);
-        Blockers.Dispose(Dependency);
-        KeyPoints.Dispose(Dependency);
+        PenultimateNodes.Dispose(Dependency);
+        Branch.Dispose(Dependency);
     }
 
     private partial struct SetPlayerSpawnPosJob : IJobEntity
@@ -228,6 +237,8 @@ public partial class SpawnPath : SystemBase
 
     private void ShowDebugCoords(IEnumerable<Vector2Int> AllPathNodes)
     {
+        Dependency.Complete();
+
         Job.WithoutBurst().WithCode(() =>
         {
             foreach (Vector2Int N in AllPathNodes)
@@ -241,7 +252,7 @@ public partial class SpawnPath : SystemBase
         }).Run();
     }
 
-    private void SpawnPathParts(SpawnPathEvent Event, NativeList<Vector2Int> Path, NativeList<Vector2Int> BranchPoints, NativeList<Vector2Int> MainPath, bool ProcessBranchPoints = true)
+    private void SpawnPathParts(SpawnPathEvent Event, NativeList<Vector2Int> Path, NativeList<Vector2Int> BranchPoints, NativeList<Vector2Int> MainPath, NativeArray<Vector2Int> PenultimateNodes, bool ProcessBranchPoints = true)
     {
         NativeList<Vector2Int> PathBranchPoints = new NativeList<Vector2Int>(0, Allocator.TempJob);
         NativeList<Vector2Int> UnionOfPaths = new NativeList<Vector2Int>(0, Allocator.TempJob);
@@ -281,6 +292,7 @@ public partial class SpawnPath : SystemBase
             BranchPoints = PathBranchPoints,
             UnionOfPathAndMainPath = UnionOfPaths,
             DoBranchPoints = ProcessBranchPoints,
+            PenultimateNodes = PenultimateNodes,
 
             SpawnOffset = new Vector3Int(Event.SpawnOffset.x, 0, Event.SpawnOffset.y),
             ThisChunkID = Event.ChunkID,
@@ -446,33 +458,28 @@ public partial class SpawnPath : SystemBase
             Randoms[0] = Rand;
 
 
-            KeyPoints[0] = StartNode;
-            KeyPoints[1] = TargetNode;
-            KeyPoints[2] = ReturnNode;
+            KeyPoints[0] = NewStartNode;
+            KeyPoints[1] = NewTargetNode;
+            KeyPoints[2] = NewReturnNodeNode;
 
         }
     }
 
-    private void FindPathBranch(NativeList<Vector2Int> FullBranchPath, NativeArray<Vector2Int> KeyPoints, NativeArray<Node> AllNodes, NativeParallelMultiHashMap<Vector2Int, Vector2Int> ForwardNodes, NativeParallelHashMap<Vector2Int, Vector2Int> BackwardNodes, NativeList<Vector2Int> OriginalPath, NativeList<Vector2Int> Blockers, ref Unity.Mathematics.Random Rand)
+    private void FindPathBranch(NativeList<Vector2Int> FullBranchPath, NativeArray<Vector2Int> KeyPoints, NativeArray<Node> AllNodes, NativeParallelMultiHashMap<Vector2Int, Vector2Int> ForwardNodes, NativeParallelHashMap<Vector2Int, Vector2Int> BackwardNodes, NativeList<Vector2Int> OriginalPath, NativeList<Vector2Int> Blockers, NativeArray<Vector2Int> PenultimateNodes, NativeArray<Unity.Mathematics.Random> Rand)
     {
-        NativeArray<Unity.Mathematics.Random> Randoms = new NativeArray<Unity.Mathematics.Random>(1, Allocator.TempJob);
-        Randoms[0] = Rand;
-
         SetupFindBranchJob SetupJob = new SetupFindBranchJob()
         {
             KeyPoints = KeyPoints,
             AllNodes = AllNodes,
             OriginalPath = OriginalPath,
             Blockers = Blockers,
-            Randoms = Randoms,
+            Randoms = Rand,
             ForwardNodes = ForwardNodes,
             BackwardNodes = BackwardNodes,
         };
 
         Dependency = SetupJob.Schedule(Dependency);
 
-        // TODO ************* Assign random back before disposal
-        Randoms.Dispose(Dependency);
 
         // Find first half
         NativeList<Vector2Int> BranchPathFirstHalf = new NativeList<Vector2Int>(Allocator.TempJob);
@@ -523,20 +530,27 @@ public partial class SpawnPath : SystemBase
             // Set forward node in the rest of the path
             for (int i = 1; i < FullBranchPath.Length; i++)
             {
-                Vector2Int ForwardNode;
-#pragma warning disable IDE0045
-                if (i < FullBranchPath.Length - 1)
-                {
-                    ForwardNode = FullBranchPath[i + 1];
-                }
-                else
-                {
-                    ForwardNode = ForwardNodes.TryGetFirstValue(FullBranchPath[i], out Vector2Int Item, out _) ? Item : Node._defaultInvalid;
-                }
-#pragma warning restore IDE0045
+                Vector2Int ForwardNode = i < FullBranchPath.Length - 1 ?
+                    FullBranchPath[i + 1] :
+                    ForwardNodes.TryGetFirstValue(FullBranchPath[i], out Vector2Int Item, out _) ? Item : Node._defaultInvalid;
 
                 ForwardNodes.Add(FullBranchPath[i], ForwardNode);
             }
+        }).Schedule(Dependency);
+
+
+        // Nodes before the reconvention
+        Dependency = Job.WithCode(() =>
+        {
+            if (FullBranchPath.Length < 1)
+            {
+                return;
+            }
+
+            PenultimateNodes[0] = OriginalPath[OriginalPath.IndexOf(KeyPoints[0]) + 1];
+            PenultimateNodes[1] = FullBranchPath[1];
+            PenultimateNodes[2] = FullBranchPath[^2];
+            PenultimateNodes[3] = OriginalPath[OriginalPath.IndexOf(KeyPoints[2]) - 1];
         }).Schedule(Dependency);
 
 
@@ -574,6 +588,7 @@ public partial class SpawnPath : SystemBase
         [ReadOnly] public NativeList<Vector2Int> PathCoords;
         [ReadOnly] public NativeList<Vector2Int> BranchPoints;
         [ReadOnly] public NativeList<Vector2Int> UnionOfPathAndMainPath;
+        [ReadOnly] public NativeArray<Vector2Int> PenultimateNodes;
         [ReadOnly] public bool DoBranchPoints;
         [ReadOnly] public Vector3Int SpawnOffset;
         [ReadOnly] public int ThisChunkID;
@@ -626,6 +641,24 @@ public partial class SpawnPath : SystemBase
             Writer.SetComponent(index, SpawnedEntity, new Translation() { Value = SpawnPos });
             Writer.SetComponent(index, SpawnedEntity, new Rotation() { Value = quaternion.LookRotation(Rotation, new float3(0, 1, 0)) });
             AddSharedComponent(index, SpawnedEntity);
+
+
+            if (PenultimateNodes[0] == default)
+            {
+                return;
+            }
+
+            // If we're after branch node add a tag to block access to the other branch
+            for (int i = 0; i < 2; i++)
+            {
+                if (PenultimateNodes[i].Equals(PathCoords[index]))
+                {
+                    Writer.AddComponent(index, SpawnedEntity, new DestroyLevelSegmentComponent()
+                    {
+                        Value = PenultimateNodes[i + 2]
+                    });
+                }
+            }
         }
 
         [BurstCompile]
