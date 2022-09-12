@@ -40,6 +40,8 @@ public partial class DestroyPreviousTileSystem : SystemBase
 
         Entity TheEntity = default;
 
+        float CurrentTime = (float)Time.ElapsedTime;
+
         EntityCommandBuffer.ParallelWriter Writer = Ecbs.CreateCommandBuffer().AsParallelWriter();
         Entities.WithAll<LevelTileTag, Translation>().ForEach((Entity E, in Translation Trans) =>
         {
@@ -47,14 +49,9 @@ public partial class DestroyPreviousTileSystem : SystemBase
 
             if (PositionAsInt.Equals(LocalPrevTilePos))
             {
-                Writer.AddComponent(0, E, new DestroyEntityTag());
+                Writer.AddComponent(0, E, new DestroyEntityAfterTime() { TimeCreated = CurrentTime, TimeToDestroy = CurrentTime + 0.2f });
                 TheEntity = E;
             }
-        }).Run();
-
-        Entities.ForEach((in DestroyLevelSegmentComponent _) =>
-        {
-            Debug.Log("Gotem!");
         }).Run();
 
         if (EntityManager.HasComponent<DestroyLevelSegmentComponent>(TheEntity))
@@ -77,58 +74,6 @@ public partial class DestroyPreviousTileSystem : SystemBase
                 }
             }).Run();
         }
-
-        // ChunkManagerSystem.Chunk ThisChunk = ChunkManager.GetChunkFromPosition(PositionAsInt);
-        // NativeList<(Vector2Int Start, Vector2Int End)> BranchPoints = ThisChunk.BranchPoints;
-        // NativeParallelMultiHashMap<Vector2Int, Vector2Int> ForwardNodes = ThisChunk.ForwardNodes;
-
-        // Job.WithCode(() =>
-        // {
-
-        //     // If this tile is a branch, find the tile where the paths re-convene and destroy the adjacent tile for the path we haven't taken
-        //     // Without this the player can complete a branch and then start walking backwards down the other Path
-        //     // This creates an island the player gets trapped on
-        //     int x = (int)math.round(PositionAsInt.x - (ThisChunk.Coord.x * SpawnPath.GRID_WIDTH * SpawnPath.REAL_WORLD_SCALE));
-        //     int z = (int)math.round(PositionAsInt.z - (ThisChunk.Coord.y * SpawnPath.GRID_WIDTH * SpawnPath.REAL_WORLD_SCALE));
-        //     Vector2Int PrevTilesCoord = new Vector2Int(x, z);
-        //     if (ForwardNodes.CountValuesForKey(PrevTilesCoord) > 1)
-        //     {
-        //         // Find the point that the two paths reconvene
-        //         Vector2Int ReconveningPoint = new Vector2Int();
-        //         for (int i = 0; i < BranchPoints.Length; i++)
-        //         {
-        //             if (BranchPoints[i].Start.Equals(PrevTilesCoord))
-        //             {
-        //                 ReconveningPoint = BranchPoints[i].End;
-        //                 break;
-        //             }
-        //         }
-
-        //         // Get the first node in the alternate path
-        //         NativeParallelMultiHashMap<Vector2Int, Vector2Int>.Enumerator Enumerator = ForwardNodes.GetValuesForKey(PrevTilesCoord);
-        //         Vector2Int OtherPathFirstNode = new Vector2Int();
-        //         while (Enumerator.MoveNext())
-        //         {
-        //             if (!Enumerator.Current.Equals(LocalCurrTilePos))
-        //             {
-        //                 OtherPathFirstNode = Enumerator.Current;
-        //                 break;
-        //             }
-        //         }
-
-
-        //         // Follow the alternate path until the two paths reconvene
-        //         NativeList<Vector2Int> PathToNode = new NativeList<Vector2Int>(Allocator.Temp);
-        //         TraverseNodes(ThisChunk, ForwardNodes, PathToNode, OtherPathFirstNode, ReconveningPoint);
-
-
-        //         Vector2Int SegmentToDestroy = PathToNode[^1];
-        //         // Writer.AddComponent(1, )
-        //     }
-        // }).Run();
-
-        // Dependency.Complete();
-
 
         PreviousTilePosition = CurrentTilePosition;
     }
