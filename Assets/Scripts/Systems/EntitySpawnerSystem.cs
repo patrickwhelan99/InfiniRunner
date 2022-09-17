@@ -34,6 +34,12 @@ public partial class EntitySpawner : SystemBase
 
         NativeArray<Translation> Ts = levelTilePieces.ToComponentDataArray<Translation>(Allocator.Temp);
         float3[] Translations = Ts.Select(x => x.Value).OrderBy(x => x.Distance(PlayerPos)).ToArray();
+
+        if (Translations.Length < 3)
+        {
+            return;
+        }
+
         float3 SpawnTilePosition = Translations.Skip(1).Take(2).ChooseRandom();
 
         Ts.Dispose();
