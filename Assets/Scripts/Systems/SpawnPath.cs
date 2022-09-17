@@ -42,7 +42,7 @@ public partial class SpawnPath : SystemBase
 
         TextPrefab = Resources.Load<GameObject>("Prefabs/Level/CoordNumsPrefab");
 
-        InitialRandomState = 655220412u; // (uint)new System.Random().Next();
+        InitialRandomState = (uint)new System.Random().Next(); // 785443340u; // 655220412u;
         Debug.Log(InitialRandomState);
         GameSeeder.InitState(InitialRandomState);
     }
@@ -91,6 +91,7 @@ public partial class SpawnPath : SystemBase
     private void CreatePath(SpawnPathEvent Event)
     {
         Unity.Mathematics.Random Rand = new Unity.Mathematics.Random(GameSeeder.NextUInt());
+        Debug.Log($"Generating Path Using Seed: {Rand.state}u");
 
 
         NativeArray<Node> AllNodes = new NativeArray<Node>(GRID_WIDTH * GRID_WIDTH, Allocator.TempJob);
@@ -160,7 +161,7 @@ public partial class SpawnPath : SystemBase
         }).Schedule(Dependency);
 
         // Spawn branches (including intersections)
-        SpawnPathParts(Event, Branch, BranchPoints, Path, PenultimateNodes, true);
+        SpawnPathParts(Event, Branch, BranchPoints, ForwardNodes, Path, PenultimateNodes, true);
 
         Blockers.Dispose(Dependency);
         KeyPoints.Dispose(Dependency);
@@ -168,7 +169,7 @@ public partial class SpawnPath : SystemBase
         // Spawn the main path (excluding intersections)
         // We don't want to pass anything in but using default gives an unitialiazed array error
         NativeList<Vector2Int> MainPath = new NativeList<Vector2Int>(0, Allocator.TempJob);
-        SpawnPathParts(Event, Path, BranchPoints, MainPath, PenultimateNodes, false);
+        SpawnPathParts(Event, Path, BranchPoints, ForwardNodes, MainPath, PenultimateNodes, false);
 
 
 
@@ -252,7 +253,7 @@ public partial class SpawnPath : SystemBase
         }).Run();
     }
 
-    private void SpawnPathParts(SpawnPathEvent Event, NativeList<Vector2Int> Path, NativeList<Vector2Int> BranchPoints, NativeList<Vector2Int> MainPath, NativeArray<Vector2Int> PenultimateNodes, bool ProcessBranchPoints = true)
+    private void SpawnPathParts(SpawnPathEvent Event, NativeList<Vector2Int> Path, NativeList<Vector2Int> BranchPoints, NativeParallelMultiHashMap<Vector2Int, Vector2Int> ForwardNodes, NativeList<Vector2Int> MainPath, NativeArray<Vector2Int> PenultimateNodes, bool ProcessBranchPoints = true)
     {
         NativeList<Vector2Int> PathBranchPoints = new NativeList<Vector2Int>(0, Allocator.TempJob);
         NativeList<Vector2Int> UnionOfPaths = new NativeList<Vector2Int>(0, Allocator.TempJob);
@@ -269,7 +270,7 @@ public partial class SpawnPath : SystemBase
             }
 
             // Add adjacent chunk's nodes for the main path
-            if (!ProcessBranchPoints && Path.Length > 0)
+            if ((!ProcessBranchPoints && Path.Length > 0) || (ProcessBranchPoints && Path.Length > 0 && (Path[^1].x % (GRID_WIDTH - 1) == 0 || Path[^1].y % (GRID_WIDTH - 1) == 0)))
             {
                 // For the first chunk, we have no previous chunks to go on
                 if (Event.ChunkID != 1)
@@ -299,7 +300,9 @@ public partial class SpawnPath : SystemBase
 
             // Only conscider the other chunks when creating the main path
             DirectionOfPreviousChunk = ProcessBranchPoints ? Vector2Int.zero : Event.DirectionOfPreviousChunk,
-            DirectionOfNextChunk = ProcessBranchPoints ? Vector2Int.zero : Event.DirectionOfNextChunk
+            DirectionOfNextChunk = ProcessBranchPoints ? Vector2Int.zero : Event.DirectionOfNextChunk,
+
+            ForwardNodes = ForwardNodes,
         };
 
         Dependency = SpawnSegmentsJob.Schedule(Path, 8, Dependency);
@@ -522,7 +525,7 @@ public partial class SpawnPath : SystemBase
             BranchPathFirstHalf.RemoveAt(BranchPathFirstHalf.Length - 1);
 
             // Join the halves
-            NativeCollectionsUtilities.CombineNativeLists(FullBranchPath, BranchPathFirstHalf, BranchPathSecondHalf, Allocator.Persistent);
+            NativeCollectionsUtilities.CombineNativeLists(FullBranchPath, BranchPathFirstHalf, BranchPathSecondHalf);
 
             // Set branch in start node
             ForwardNodes.Add(KeyPoints[0], FullBranchPath[1]);
@@ -558,6 +561,14 @@ public partial class SpawnPath : SystemBase
         BranchPathSecondHalf.Dispose(Dependency);
     }
 
+    private class EventSorter : IComparer<SpawnPathEvent>
+    {
+        public int Compare(SpawnPathEvent x, SpawnPathEvent y)
+        {
+            return x.ChunkID.CompareTo(y.ChunkID);
+        }
+    }
+
     protected override void OnUpdate()
     {
         EntityCommandBuffer.ParallelWriter Writer = Ecbs.CreateCommandBuffer().AsParallelWriter();
@@ -571,6 +582,8 @@ public partial class SpawnPath : SystemBase
 
         EntityQuery EventsQuery = EntityManager.CreateEntityQuery(typeof(SpawnPathEvent));
         NativeArray<SpawnPathEvent> Events = EventsQuery.ToComponentDataArray<SpawnPathEvent>(Allocator.Temp);
+
+        Events.Sort(new EventSorter());
 
         for (int i = 0; i < Events.Length; i++)
         {
@@ -594,11 +607,20 @@ public partial class SpawnPath : SystemBase
         [ReadOnly] public int ThisChunkID;
         [ReadOnly] public Vector2Int DirectionOfPreviousChunk;
         [ReadOnly] public Vector2Int DirectionOfNextChunk;
+        [ReadOnly] public NativeParallelMultiHashMap<Vector2Int, Vector2Int> ForwardNodes;
 
         [BurstDiscard]
         public void Execute(int index)
         {
-            if (DoBranchPoints && PathCoords.Length < 1)
+            if (PathCoords.Length < 1)
+            {
+                return;
+            }
+
+            // For the main path we add the first nodes from adjacent chunks to the beginning and end of the list
+            // This makes the prefab spawning much easier, but we don't want to actually create prefabs for these
+            // Segments in different chunks
+            if ((index == 0 || index == PathCoords.Length - 1) && IsNotInChunk(PathCoords[index]))
             {
                 return;
             }
@@ -608,19 +630,6 @@ public partial class SpawnPath : SystemBase
             {
                 return;
             }
-
-            // For the main path we add the first nodes from adjacent chunks to the beginning and end of the list
-            // This makes the prefab spawning much easier, but we don't want to actually create prefabs for these
-            // Segments in different chunks
-            if (!DoBranchPoints && ThisChunkID == 1 && index == PathCoords.Length - 1)
-            {
-                return;
-            }
-            if (!DoBranchPoints && (index == 0 || index == PathCoords.Length - 1) && ThisChunkID != 1)
-            {
-                return;
-            }
-
 
             float3 SpawnPos = new float3()
             {
@@ -659,6 +668,12 @@ public partial class SpawnPath : SystemBase
                     });
                 }
             }
+        }
+
+        [BurstCompile]
+        private bool IsNotInChunk(Vector2Int Coord)
+        {
+            return Coord.x < 0 || Coord.y < 0 || Coord.x > GRID_WIDTH - 1 || Coord.y > GRID_WIDTH - 1;
         }
 
         [BurstCompile]
@@ -721,13 +736,48 @@ public partial class SpawnPath : SystemBase
 
                 Vector2Int ClosedDirection = Vector2Int.zero;
 
-
-
                 for (int i = 0; i < Neighbours.Length; i++)
                 {
-                    if (!UnionOfPathAndMainPath.Contains(Neighbours[i]))
+                    bool NodePointsToCurrent = false;
+
+                    // If it's in the path but not the currect chunk then we must be adjacent & connected to it
+                    // This is because there is only one node from the next chunk in the path, and it is the next
+                    // Node to be traversed
+                    if (IsNotInChunk(Neighbours[i]) && PathCoords.NativeAny(x => x == Neighbours[i]))
+                    {
+                        NodePointsToCurrent = true;
+                    }
+
+                    // Check if current node points forwards to it
+                    if (!NodePointsToCurrent)
+                    {
+                        foreach (Vector2Int item in ForwardNodes.GetValuesForKey(CurrentCoord))
+                        {
+                            if (item == Neighbours[i])
+                            {
+                                NodePointsToCurrent = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!NodePointsToCurrent)
+                    {
+                        // Check if neighbour points forward to current node
+                        foreach (Vector2Int item in ForwardNodes.GetValuesForKey(Neighbours[i]))
+                        {
+                            if (item == CurrentCoord)
+                            {
+                                NodePointsToCurrent = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!NodePointsToCurrent)
                     {
                         ClosedDirection = Neighbours[i] - CurrentCoord;
+                        break;
                     }
                 }
 
