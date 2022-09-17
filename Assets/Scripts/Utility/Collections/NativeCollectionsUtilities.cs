@@ -11,7 +11,7 @@ namespace Paz.Utility.Collections
         [BurstCompile]
         public static void CombineNativeArrays<T>(NativeArray<T> ReturnArray, NativeArray<T> Array, NativeArray<T> Array2, Allocator Allocator) where T : struct
         {
-            if(ReturnArray.IsCreated)
+            if (ReturnArray.IsCreated)
             {
                 ReturnArray.Dispose();
             }
@@ -29,9 +29,9 @@ namespace Paz.Utility.Collections
         }
 
         [BurstCompile]
-        public static void CombineNativeLists<T>(NativeList<T> ReturnList, NativeList<T> Array, NativeList<T> Array2, Allocator Allocator) where T : unmanaged
+        public static void CombineNativeLists<T>(NativeList<T> ReturnList, NativeList<T> Array, NativeList<T> Array2) where T : unmanaged
         {
-            if(ReturnList.IsCreated && ReturnList.Length > 0)
+            if (ReturnList.IsCreated && ReturnList.Length > 0)
             {
                 ReturnList.Clear();
             }

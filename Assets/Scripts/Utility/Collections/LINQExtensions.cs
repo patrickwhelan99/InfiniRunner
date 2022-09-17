@@ -30,6 +30,32 @@ public static class LINQExtensions
         }
     }
 
+    public static bool NativeAny<T>(this NativeArray<T> Collection, System.Func<T, bool> Predicate) where T : struct
+    {
+        for (int i = 0; i < Collection.Length; i++)
+        {
+            if (Predicate(Collection[i]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static bool NativeAny<T>(this NativeList<T> Collection, System.Func<T, bool> Predicate) where T : unmanaged
+    {
+        for (int i = 0; i < Collection.Length; i++)
+        {
+            if (Predicate(Collection[i]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static int GetNodeIndex(this NativeArray<Node> Collection, UnityEngine.Vector2Int Coordinate)
     {
         int Width = Collection[^1].Coord.x + 1;
