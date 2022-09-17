@@ -56,8 +56,8 @@ public partial class ChunkManagerSystem : SystemBase
 
         NativeArray<Chunk> ChunksArray = currentChunks.ToArray(Allocator.Temp);
 
-        // If the player is in the middle chunk
-        if ((ChunksArray.Length > 1 && ChunksArray[1].ID == ChunkPlayerInhabits.ID) || currentChunks.Count < 2)
+        // If the player is not in the first chunk
+        if ((ChunksArray.Length > 1 && ChunksArray[0].ID != ChunkPlayerInhabits.ID) || currentChunks.Count < 2)
         {
             SpawnChunk();
         }
