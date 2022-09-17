@@ -44,7 +44,7 @@ public partial class DestroyPreviousTileSystem : SystemBase
         bool AddDissolveComponent = false;
 
         EntityCommandBuffer.ParallelWriter Writer = Ecbs.CreateCommandBuffer().AsParallelWriter();
-        Entities.WithAll<LevelTileTag, Translation>().ForEach((Entity E, in Translation Trans) =>
+        Entities.WithAll<LevelTileTag, Translation>().WithNone<DestroyEntityAfterTime>().ForEach((Entity E, in Translation Trans) =>
         {
             PositionAsInt = new int3((int)math.round(Trans.Value.x), -2, (int)math.round(Trans.Value.z));
 
