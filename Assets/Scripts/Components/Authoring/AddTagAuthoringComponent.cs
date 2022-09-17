@@ -1,5 +1,4 @@
 using Unity.Entities;
-using Unity.Mathematics;
 using UnityEngine;
 
 using System;
@@ -11,7 +10,7 @@ public class AddTagAuthoringComponent : MonoBehaviour, IConvertGameObjectToEntit
 {
 
     [SerializeField]
-    string ChosenTag;
+    private readonly string ChosenTag;
 
     public void Convert(Entity entity, EntityManager dstManager, GameObjectConversionSystem conversionSystem)
     {
@@ -25,16 +24,16 @@ public class AddTagAuthoringComponent : MonoBehaviour, IConvertGameObjectToEntit
         // Filter for zero sized components (tags)
         ValidTypes = ValidTypes.Where
                                 (
-                                    x => Unity.Entities.TypeManager.GetTypeInfo
+                                    x => TypeManager.GetTypeInfo
                                         (
-                                            Unity.Entities.TypeManager.GetTypeIndex(x)
+                                            TypeManager.GetTypeIndex(x)
                                         )
                                         .IsZeroSized
                                 ).ToArray();
 
         Type ChosenType = ValidTypes.FirstOrDefault(x => x.Name == ChosenTag);
 
-        if(ChosenType == default)
+        if (ChosenType == default)
         {
             Debug.LogError($"Couldn't find tag of type {ChosenType} to add to entity.");
         }

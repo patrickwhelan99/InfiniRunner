@@ -1,23 +1,19 @@
-using System.Collections;
-using System.Collections.Generic;
 using NUnit.Framework;
-using UnityEngine;
-using UnityEngine.TestTools;
 
 using Paz.Utility.Collections;
 
 public class ObservableHashSetTest
 {
-    readonly static int TESTNUMBER = 1;
+    private static readonly int TESTNUMBER = 1;
 
     [Test]
     public void ADD_AND_REMOVE()
     {
         // Setup
         ObservableHashSet<int> HashSet = new ObservableHashSet<int>();
-        HashSet.Register((EventData) => 
+        HashSet.Register((EventData) =>
         {
-            switch(EventData.operation)
+            switch (EventData.operation)
             {
                 case CollectionModifiedEventEnum.ADDED:
                     Assert.That(EventData.added == TESTNUMBER);
@@ -25,6 +21,10 @@ public class ObservableHashSetTest
 
                 case CollectionModifiedEventEnum.REMOVED:
                     Assert.That(EventData.removed == TESTNUMBER);
+                    break;
+
+                case CollectionModifiedEventEnum.REPLACED:
+                default:
                     break;
             }
         });
