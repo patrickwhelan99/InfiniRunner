@@ -183,8 +183,8 @@ public partial class ChunkManagerSystem : SystemBase
             (
                 Position.x < ChunkMax.x &&
                 Position.x > ChunkMin.x &&
-                Position.y > ChunkMax.y &&
-                Position.y < ChunkMin.y
+                Position.z > ChunkMax.y &&
+                Position.z < ChunkMin.y
             )
             {
                 return ChunksArray[i];
