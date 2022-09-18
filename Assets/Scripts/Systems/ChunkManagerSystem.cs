@@ -84,7 +84,7 @@ public partial class ChunkManagerSystem : SystemBase
         Vector2Int DirPrevChunk = currentChunkCoord - nextChunkCoord;
 
         Vector2Int Direction = nextChunkCoord - currentChunkCoord;
-        Vector2Int Start = newestChunkID > 0 ? GetOppositeEdgeNode(Direction, endNode, SpawnPath.GRID_WIDTH) : GetRandomEdgeNode(Direction, SpawnPath.GRID_WIDTH, ref random);
+        Vector2Int Start = newestChunkID > 0 ? GetOppositeEdgeNode(Direction, endNode, WorldConstants.GRID_WIDTH) : GetRandomEdgeNode(Direction, WorldConstants.GRID_WIDTH, ref random);
 
         // Pick the direction of the next new chunk
         currentChunkCoord = nextChunkCoord;
@@ -107,7 +107,7 @@ public partial class ChunkManagerSystem : SystemBase
         Entity SpawnPathEvent = EntityManager.CreateEntity(typeof(SpawnPathEvent));
 
         Direction = nextChunkCoord - currentChunkCoord;
-        Vector2Int End = endNode = GetRandomEdgeNode(Direction, SpawnPath.GRID_WIDTH, ref random);
+        Vector2Int End = endNode = GetRandomEdgeNode(Direction, WorldConstants.GRID_WIDTH, ref random);
 
         EntityManager.SetComponentData(SpawnPathEvent, new SpawnPathEvent()
         {
@@ -174,9 +174,9 @@ public partial class ChunkManagerSystem : SystemBase
         {
             Vector2Int ChunkMin, ChunkMax;
 
-            int ChunkSize = SpawnPath.GRID_WIDTH * SpawnPath.REAL_WORLD_SCALE;
+            int ChunkSize = WorldConstants.GRID_WIDTH * WorldConstants.REAL_WORLD_SCALE;
 
-            ChunkMin = new Vector2Int((ChunksArray[i].Coord.x * ChunkSize) - (SpawnPath.REAL_WORLD_SCALE / 2), (ChunksArray[i].Coord.y * ChunkSize) + (SpawnPath.REAL_WORLD_SCALE / 2));
+            ChunkMin = new Vector2Int((ChunksArray[i].Coord.x * ChunkSize) - (WorldConstants.REAL_WORLD_SCALE / 2), (ChunksArray[i].Coord.y * ChunkSize) + (WorldConstants.REAL_WORLD_SCALE / 2));
             ChunkMax = ChunkMin + new Vector2Int(ChunkSize, -ChunkSize);
 
             if

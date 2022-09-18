@@ -20,9 +20,6 @@ public partial class SpawnPath : SystemBase
 
     private enum Direction { NONE, STRAIGHT, LEFT, RIGHT };
 
-    public const int REAL_WORLD_SCALE = 20;
-    public const int GRID_WIDTH = 10;
-
     private NativeArray<Entity> LevelPrefabs;
 
     private GameObject TextPrefab;
@@ -73,7 +70,7 @@ public partial class SpawnPath : SystemBase
             openSet = OpenSet,
             startAndEndNodes = StartAndEndNodes,
             heuristicWeight = 5.0f,
-            width = GRID_WIDTH,
+            width = WorldConstants.GRID_WIDTH,
 
             startNodeIndex = StartNodeIndex,
             endNodeIndex = EndNodeIndex,
@@ -94,8 +91,8 @@ public partial class SpawnPath : SystemBase
         Debug.Log($"Generating Path Using Seed: {Rand.state}u");
 
 
-        NativeArray<Node> AllNodes = new NativeArray<Node>(GRID_WIDTH * GRID_WIDTH, Allocator.TempJob);
-        GridLayouts.RandomBlockers.GenerateGrid(AllNodes, GRID_WIDTH, ref Rand);
+        NativeArray<Node> AllNodes = new NativeArray<Node>(WorldConstants.GRID_WIDTH * WorldConstants.GRID_WIDTH, Allocator.TempJob);
+        GridLayouts.RandomBlockers.GenerateGrid(AllNodes, WorldConstants.GRID_WIDTH, ref Rand);
 
 
         NativeParallelMultiHashMap<Vector2Int, Vector2Int> ForwardNodes = new NativeParallelMultiHashMap<Vector2Int, Vector2Int>(AllNodes.Length, Allocator.TempJob);
@@ -228,9 +225,9 @@ public partial class SpawnPath : SystemBase
             {
                 Value = new float3
                 (
-                    Offset.x + (Path[0].x * REAL_WORLD_SCALE),
+                    Offset.x + (Path[0].x * WorldConstants.REAL_WORLD_SCALE),
                     5.0f,
-                    Offset.y + (Path[0].y * -1 * REAL_WORLD_SCALE)
+                    Offset.y + (Path[0].y * -1 * WorldConstants.REAL_WORLD_SCALE)
                 )
             };
         }
@@ -245,7 +242,7 @@ public partial class SpawnPath : SystemBase
             foreach (Vector2Int N in AllPathNodes)
             {
                 GameObject Go = Object.Instantiate(TextPrefab);
-                Vector3 Pos = new Vector3(N.x * REAL_WORLD_SCALE, 0.0f, N.y * -1.0f * REAL_WORLD_SCALE);
+                Vector3 Pos = new Vector3(N.x * WorldConstants.REAL_WORLD_SCALE, 0.0f, N.y * -1.0f * WorldConstants.REAL_WORLD_SCALE);
                 TMP_Text T = Go.GetComponent<TMP_Text>();
                 T.text = $"{N.x},{N.y}";
                 Go.transform.position = Pos;
@@ -270,7 +267,7 @@ public partial class SpawnPath : SystemBase
             }
 
             // Add adjacent chunk's nodes for the main path
-            if ((!ProcessBranchPoints && Path.Length > 0) || (ProcessBranchPoints && Path.Length > 0 && (Path[^1].x % (GRID_WIDTH - 1) == 0 || Path[^1].y % (GRID_WIDTH - 1) == 0)))
+            if ((!ProcessBranchPoints && Path.Length > 0) || (ProcessBranchPoints && Path.Length > 0 && (Path[^1].x % (WorldConstants.GRID_WIDTH - 1) == 0 || Path[^1].y % (WorldConstants.GRID_WIDTH - 1) == 0)))
             {
                 // For the first chunk, we have no previous chunks to go on
                 if (Event.ChunkID != 1)
@@ -587,7 +584,7 @@ public partial class SpawnPath : SystemBase
 
         for (int i = 0; i < Events.Length; i++)
         {
-            Vector3Int SpawnOffset = new Vector3Int(Events[i].ChunkCoord.x * GRID_WIDTH * REAL_WORLD_SCALE, 0, Events[i].ChunkCoord.y * GRID_WIDTH * REAL_WORLD_SCALE);
+            Vector3Int SpawnOffset = new Vector3Int(Events[i].ChunkCoord.x * WorldConstants.GRID_WIDTH * WorldConstants.REAL_WORLD_SCALE, 0, Events[i].ChunkCoord.y * WorldConstants.GRID_WIDTH * WorldConstants.REAL_WORLD_SCALE);
             int CurrentChunkID = Events[i].ChunkID;
             CreatePath(Events[i]);
         }
@@ -633,9 +630,9 @@ public partial class SpawnPath : SystemBase
 
             float3 SpawnPos = new float3()
             {
-                x = SpawnOffset.x + (PathCoords[index].x * REAL_WORLD_SCALE),
+                x = SpawnOffset.x + (PathCoords[index].x * WorldConstants.REAL_WORLD_SCALE),
                 y = -2.0f,
-                z = SpawnOffset.z + (PathCoords[index].y * REAL_WORLD_SCALE * -1.0f) // so the graph is drawn from top left instead of bottom left
+                z = SpawnOffset.z + (PathCoords[index].y * WorldConstants.REAL_WORLD_SCALE * -1.0f) // so the graph is drawn from top left instead of bottom left
             };
 
 
@@ -673,7 +670,7 @@ public partial class SpawnPath : SystemBase
         [BurstCompile]
         private bool IsNotInChunk(Vector2Int Coord)
         {
-            return Coord.x < 0 || Coord.y < 0 || Coord.x > GRID_WIDTH - 1 || Coord.y > GRID_WIDTH - 1;
+            return Coord.x < 0 || Coord.y < 0 || Coord.x > WorldConstants.GRID_WIDTH - 1 || Coord.y > WorldConstants.GRID_WIDTH - 1;
         }
 
         [BurstCompile]

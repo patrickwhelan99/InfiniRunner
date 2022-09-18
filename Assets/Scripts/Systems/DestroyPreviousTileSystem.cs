@@ -49,7 +49,7 @@ public partial class DestroyPreviousTileSystem : SystemBase
         Entities.WithAll<LevelTileTag, Translation>().WithNone<DestroyEntityAfterTime>().ForEach((Entity E, in Translation Trans) =>
         {
             PositionAsInt = new int3((int)math.round(Trans.Value.x), -2, (int)math.round(Trans.Value.z));
-            
+
             if (PositionAsInt.Equals(LocalCurrTilePos))
             {
                 Continue = true;
@@ -88,8 +88,8 @@ public partial class DestroyPreviousTileSystem : SystemBase
             {
                 PositionAsInt = new int3((int)math.round(Trans.Value.x), -2, (int)math.round(Trans.Value.z));
 
-                int X = (PositionAsInt.x - (ThisChunk.Coord.x * SpawnPath.GRID_WIDTH * SpawnPath.REAL_WORLD_SCALE)) / SpawnPath.REAL_WORLD_SCALE;
-                int Y = (PositionAsInt.z - (ThisChunk.Coord.y * SpawnPath.GRID_WIDTH * SpawnPath.REAL_WORLD_SCALE)) / SpawnPath.REAL_WORLD_SCALE;
+                int X = (PositionAsInt.x - (ThisChunk.Coord.x * WorldConstants.GRID_WIDTH * WorldConstants.REAL_WORLD_SCALE)) / WorldConstants.REAL_WORLD_SCALE;
+                int Y = (PositionAsInt.z - (ThisChunk.Coord.y * WorldConstants.GRID_WIDTH * WorldConstants.REAL_WORLD_SCALE)) / WorldConstants.REAL_WORLD_SCALE;
 
                 Vector2Int Coord = new Vector2Int(X, Y * -1);
 
@@ -138,10 +138,10 @@ public partial class DestroyPreviousTileSystem : SystemBase
 
     private int RoundToGridSize(float Num)
     {
-        float N = Num / SpawnPath.REAL_WORLD_SCALE;
+        float N = Num / WorldConstants.REAL_WORLD_SCALE;
 
-        int LowerX = ((int)math.floor(N)) * SpawnPath.REAL_WORLD_SCALE;
-        int UpperX = ((int)math.ceil(N)) * SpawnPath.REAL_WORLD_SCALE;
+        int LowerX = ((int)math.floor(N)) * WorldConstants.REAL_WORLD_SCALE;
+        int UpperX = ((int)math.ceil(N)) * WorldConstants.REAL_WORLD_SCALE;
         int RoundedN = Num - LowerX > UpperX - Num ? UpperX : LowerX;
 
         return RoundedN;
