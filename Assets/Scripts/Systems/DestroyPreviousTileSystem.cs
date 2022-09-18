@@ -43,6 +43,25 @@ public partial class DestroyPreviousTileSystem : SystemBase
         float CurrentTime = (float)Time.ElapsedTime;
         bool AddDissolveComponent = false;
 
+        // Check that the tile we're entering isn't already scheduled to be destroyed
+        // This stops the player going backwards and triggering the destruction of the current tile
+        bool Continue = false;
+        Entities.WithAll<LevelTileTag, Translation>().WithNone<DestroyEntityAfterTime>().ForEach((Entity E, in Translation Trans) =>
+        {
+            PositionAsInt = new int3((int)math.round(Trans.Value.x), -2, (int)math.round(Trans.Value.z));
+            
+            if (PositionAsInt.Equals(LocalCurrTilePos))
+            {
+                Continue = true;
+            }
+        }).Run();
+
+
+        if (!Continue)
+        {
+            return;
+        }
+
         EntityCommandBuffer.ParallelWriter Writer = Ecbs.CreateCommandBuffer().AsParallelWriter();
         Entities.WithAll<LevelTileTag, Translation>().WithNone<DestroyEntityAfterTime>().ForEach((Entity E, in Translation Trans) =>
         {

@@ -15,7 +15,7 @@ public partial class EntitySpawner : SystemBase
     private Entity enemyPrefab;
     private EntityQuery levelTilePieces;
 
-    private const int TO_SPAWN = 2;
+    private const int TO_SPAWN = 0;
 
     protected override void OnCreate()
     {
