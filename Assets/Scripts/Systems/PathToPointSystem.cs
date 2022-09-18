@@ -24,7 +24,7 @@ public partial class PathToPointSystem : SystemBase
 
     protected override void OnUpdate()
     {
-        if (Ecbs.TryGetSingletonEntity<PlayerTag>(out Entity Player))
+        if (TryGetSingletonEntity<PlayerTag>(out Entity Player))
         {
             float3 Target = Ecbs.GetComponentDataFromEntity<LocalToWorld>()[Player].Position;
             Dependency = new UpdateEnemiesTargetPosition()
