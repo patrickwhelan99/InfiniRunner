@@ -26,6 +26,9 @@ public partial class RandomSystem : SystemBase
 
     protected override void OnDestroy()
     {
-        random.Dispose();
+        if (random.IsCreated)
+        {
+            random.Dispose();
+        }
     }
 }

@@ -77,6 +77,12 @@ public partial class DestroyPreviousTileSystem : SystemBase
 
         if (AddDissolveComponent)
         {
+            Entity ScoreModifiedEvent = EntityManager.CreateEntity(typeof(ModifyScoreEvent));
+            EntityManager.SetComponentData(ScoreModifiedEvent, new ModifyScoreEvent()
+            {
+                Value = 50
+            });
+
             AddDissolveComponentToChildren(TheEntity, Ecbs.CreateCommandBuffer());
         }
 

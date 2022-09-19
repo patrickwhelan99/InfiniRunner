@@ -88,7 +88,6 @@ public partial class SpawnPath : SystemBase
     private void CreatePath(SpawnPathEvent Event)
     {
         Unity.Mathematics.Random Rand = new Unity.Mathematics.Random(GameSeeder.NextUInt());
-        Debug.Log($"Generating Path Using Seed: {Rand.state}u");
 
 
         NativeArray<Node> AllNodes = new NativeArray<Node>(WorldConstants.GRID_WIDTH * WorldConstants.GRID_WIDTH, Allocator.TempJob);
