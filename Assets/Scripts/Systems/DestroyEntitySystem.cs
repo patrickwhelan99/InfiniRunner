@@ -1,36 +1,49 @@
+using Unity.Collections;
 using Unity.Entities;
-using Unity.Jobs;
 
 [UpdateInGroup(typeof(LateSimulationSystemGroup))]
 public partial class DestroyEntitySystem : SystemBase
 {
     private EntityCommandBufferSystem Ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
 
-    private EntityQuery EntitiesToDestroyQuery;
+    private EntityQuery entitiesToDestroyQuery;
+    private EntityQuery playerQuery;
 
     protected override void OnCreate()
     {
-        EntitiesToDestroyQuery = EntityManager.CreateEntityQuery(typeof(DestroyEntityTag));
+        entitiesToDestroyQuery = EntityManager.CreateEntityQuery(typeof(DestroyEntityTag));
+        playerQuery = EntityManager.CreateEntityQuery(typeof(PlayerTag));
     }
 
     protected override void OnUpdate()
     {
         DestroyEntitiesJob Job = new DestroyEntitiesJob()
         {
-            Writer = Ecbs.CreateCommandBuffer().AsParallelWriter()
+            Writer = Ecbs.CreateCommandBuffer().AsParallelWriter(),
+            PlayersQuery = GetComponentDataFromEntity<PlayerTag>(true),
         };
 
-        Job.ScheduleParallel(EntitiesToDestroyQuery).Complete();
+        Job.ScheduleParallel(entitiesToDestroyQuery).Complete();
     }
 
     private partial struct DestroyEntitiesJob : IJobEntity
     {
         public EntityCommandBuffer.ParallelWriter Writer;
+        [ReadOnly] public ComponentDataFromEntity<PlayerTag> PlayersQuery;
 
         [Unity.Collections.LowLevel.Unsafe.NativeSetThreadIndex]
         public int nativeThreadIndex;
         public void Execute(Entity Ent)
         {
+            if (PlayersQuery.HasComponent(Ent))
+            {
+                Entity GameOverEntity = Writer.CreateEntity(nativeThreadIndex);
+                Writer.AddComponent(nativeThreadIndex, GameOverEntity, new GameOverEvent()
+                {
+                    Value = GameOverReason.PLAYER_FELL
+                });
+            }
+
             Writer.DestroyEntity(nativeThreadIndex, Ent);
         }
     }

@@ -1,14 +1,10 @@
 using UnityEngine;
 using Unity.Entities;
 
-public class PrefabConverter
+public class PrefabConverter : Singleton<PrefabConverter>
 {
     private BlobAssetStore BlobStore;
     private GameObjectConversionSettings Settings;
-
-    public static PrefabConverter _instance;
-    public static PrefabConverter Instance => _instance ??= new PrefabConverter();
-
     public static Entity Convert(GameObject Obj)
     {
         Instance.BlobStore ??= new BlobAssetStore();
@@ -19,8 +15,8 @@ public class PrefabConverter
         return E;
     }
 
-    public static void Dispose()
+    protected void OnDestroy()
     {
-        Instance.BlobStore.Dispose();
+        BlobStore.Dispose();
     }
 }
