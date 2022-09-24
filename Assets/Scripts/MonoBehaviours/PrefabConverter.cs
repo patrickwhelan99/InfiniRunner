@@ -17,6 +17,6 @@ public class PrefabConverter : Singleton<PrefabConverter>
 
     protected void OnDestroy()
     {
-        BlobStore.Dispose();
+        BlobStore?.Dispose();
     }
 }
