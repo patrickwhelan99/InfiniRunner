@@ -5,11 +5,24 @@ public partial class ScoringSystem : SystemBase
 {
     private EntityCommandBufferSystem Ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
 
-    public static int Score { get; private set; }
+    private static int _score;
+    public static int Score
+    {
+        get => _score;
+
+        private set
+        {
+            if (value != _score)
+            {
+                _score = value;
+                OnScoreModified?.Invoke(Score);
+            }
+        }
+    }
 
     private EntityQuery scoreModifiersQuery;
 
-    public event System.Action<int> OnScoreModified;
+    public static event System.Action<int> OnScoreModified;
 
     public void RegisterCallback(System.Action<int> Action)
     {
@@ -29,20 +42,11 @@ public partial class ScoringSystem : SystemBase
 
     protected override void OnUpdate()
     {
-        int Change = Score;
-
         EntityCommandBuffer Ecb = Ecbs.CreateCommandBuffer();
         Entities.ForEach((Entity E, in ModifyScoreEvent Event) =>
         {
             Score = math.max(0, Score + Event.Value);
             Ecb.DestroyEntity(E);
-        }).Run();
-
-        Change = Score - Change;
-
-        if (Change != 0)
-        {
-            OnScoreModified?.Invoke(Score);
-        }
+        }).WithoutBurst().Run();
     }
 }
