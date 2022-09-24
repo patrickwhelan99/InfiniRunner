@@ -3,6 +3,6 @@ public partial class VariableSystemGroupThreeSeconds : VariableRateSimulationSys
 {
     public VariableSystemGroupThreeSeconds()
     {
-        RateManager = new RateUtils.VariableRateManager(1000);
+        RateManager = new RateUtils.VariableRateManager(3000);
     }
 }
