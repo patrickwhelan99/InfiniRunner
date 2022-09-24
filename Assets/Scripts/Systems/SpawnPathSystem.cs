@@ -12,7 +12,7 @@ using Paz.Utility.Collections;
 using Unity.Physics;
 using TMPro;
 
-[UpdateInGroup(typeof(VariableSystemGroupThreeSeconds))]
+// [UpdateInGroup(typeof(VariableSystemGroupThreeSeconds))]
 // [AlwaysUpdateSystem]
 public partial class SpawnPath : SystemBase
 {
@@ -196,7 +196,7 @@ public partial class SpawnPath : SystemBase
         Dependency.Complete();
 
         // Add coord numbers
-        ShowDebugCoords(Path.ToArray().Union(Branch.ToArray()).Distinct());
+        // ShowDebugCoords(Path.ToArray().Union(Branch.ToArray()).Distinct());
 
         AllNodes.Dispose(Dependency);
         Path.Dispose(Dependency);
@@ -571,7 +571,7 @@ public partial class SpawnPath : SystemBase
 
         Dependency = Entities.ForEach((Entity E, in SpawnPathEvent Event) =>
         {
-            Writer.AddComponent(0, E, new DestroyEntityTag());
+            Writer.DestroyEntity(0, E);
         }).ScheduleParallel(Dependency);
 
         Dependency.Complete();
