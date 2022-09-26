@@ -15,7 +15,7 @@ public partial class ScoringSystem : SystemBase
             if (value != _score)
             {
                 _score = value;
-                OnScoreModified?.Invoke(Score);
+                OnScoreModified?.Invoke(value);
             }
         }
     }
@@ -48,5 +48,7 @@ public partial class ScoringSystem : SystemBase
             Score = math.max(0, Score + Event.Value);
             Ecb.DestroyEntity(E);
         }).WithoutBurst().Run();
+
+        Ecb.Playback(EntityManager);
     }
 }
