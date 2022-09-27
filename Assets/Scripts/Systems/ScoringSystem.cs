@@ -42,7 +42,7 @@ public partial class ScoringSystem : SystemBase
 
     protected override void OnUpdate()
     {
-        EntityCommandBuffer Ecb = Ecbs.CreateCommandBuffer();
+        EntityCommandBuffer Ecb = new EntityCommandBuffer(Unity.Collections.Allocator.Temp); //Ecbs.CreateCommandBuffer();
         Entities.ForEach((Entity E, in ModifyScoreEvent Event) =>
         {
             Score = math.max(0, Score + Event.Value);
@@ -50,5 +50,6 @@ public partial class ScoringSystem : SystemBase
         }).WithoutBurst().Run();
 
         Ecb.Playback(EntityManager);
+        Ecb.Dispose();
     }
 }
