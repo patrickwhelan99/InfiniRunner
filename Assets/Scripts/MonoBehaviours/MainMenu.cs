@@ -61,7 +61,8 @@ public class MainMenu : MonoBehaviour
         startNewGameButton.onClick.AddListener(() =>
         {
             newGameSeed = newGameSeedField.text;
-            UnityEngine.SceneManagement.SceneManager.LoadScene("Scene");
+
+            UnityEngine.SceneManagement.SceneManager.LoadScene(1);
         });
     }
 }
