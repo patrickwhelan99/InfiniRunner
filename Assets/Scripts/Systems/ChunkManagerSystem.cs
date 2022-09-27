@@ -43,9 +43,9 @@ public partial class ChunkManagerSystem : SystemBase
     }
     protected override void OnUpdate()
     {
-        if (random.state == 0u && SpawnPath.InitialRandomState != 0u)
+        if (random.state == 0u && SpawnPathSystem.InitialRandomState != 0u)
         {
-            random.InitState(SpawnPath.InitialRandomState);
+            random.InitState(SpawnPathSystem.InitialRandomState);
         }
 
 

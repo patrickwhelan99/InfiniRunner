@@ -12,9 +12,7 @@ using Paz.Utility.Collections;
 using Unity.Physics;
 using TMPro;
 
-// [UpdateInGroup(typeof(VariableSystemGroupThreeSeconds))]
-// [AlwaysUpdateSystem]
-public partial class SpawnPath : SystemBase
+public partial class SpawnPathSystem : SystemBase
 {
     private EntityCommandBufferSystem Ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
 
