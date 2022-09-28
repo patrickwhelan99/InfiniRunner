@@ -5,10 +5,12 @@ public class PrefabConverter : Singleton<PrefabConverter>
 {
     private BlobAssetStore BlobStore;
     private GameObjectConversionSettings Settings;
-    public static Entity Convert(GameObject Obj)
+    public static Entity Convert(GameObject Obj, World DestinationWorld = default)
     {
+        World DestWorld = DestinationWorld ?? World.DefaultGameObjectInjectionWorld;
+
         Instance.BlobStore ??= new BlobAssetStore();
-        Instance.Settings ??= GameObjectConversionSettings.FromWorld(World.DefaultGameObjectInjectionWorld, Instance.BlobStore);
+        Instance.Settings ??= GameObjectConversionSettings.FromWorld(DestWorld, Instance.BlobStore);
 
         Entity E = GameObjectConversionUtility.ConvertGameObjectHierarchy(Obj, Instance.Settings);
 

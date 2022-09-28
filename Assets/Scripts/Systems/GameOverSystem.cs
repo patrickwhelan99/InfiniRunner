@@ -19,11 +19,7 @@ public partial class GameOverSystem : SystemBase
             Reason = Event.Value;
             Ecb.DestroyEntity(E);
         }).Run();
-
-        SceneSystem sceneSystem = World.GetExistingSystem<SceneSystem>();
-        Hash128 guid = sceneSystem.GetSceneGUID("Assets/Scenes/MainMenu.unity");
-        Entity sceneEntity = sceneSystem.LoadSceneAsync(guid);
-
+        
         GameManager.Instance.GameOver();
     }
 }

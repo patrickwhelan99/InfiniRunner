@@ -11,7 +11,9 @@
         "Unity.Entities.Tests",
         "Unity.Mathematics",
         "Unity.Transforms",
-        "Unity.Collections"
+        "Unity.Collections",
+        "Unity.Rendering.Hybrid",
+        "Unity.Scenes"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
