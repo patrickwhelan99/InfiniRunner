@@ -10,7 +10,9 @@ public class PrefabConverter : Singleton<PrefabConverter>
         World DestWorld = DestinationWorld ?? World.DefaultGameObjectInjectionWorld;
 
         Instance.BlobStore ??= new BlobAssetStore();
-        Instance.Settings ??= GameObjectConversionSettings.FromWorld(DestWorld, Instance.BlobStore);
+        Instance.Settings ??= new GameObjectConversionSettings(DestWorld, GameObjectConversionUtility.ConversionFlags.IsBuildingForPlayer);
+
+        Instance.Settings.DestinationWorld = DestWorld;
 
         Entity E = GameObjectConversionUtility.ConvertGameObjectHierarchy(Obj, Instance.Settings);
 
