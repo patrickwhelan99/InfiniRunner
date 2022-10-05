@@ -33,6 +33,8 @@ public partial class PlayerMovementSystem : SystemBase
     protected override void OnCreate()
     {
         projectilePrefab = PrefabConverter.Convert((GameObject)Resources.Load("Prefabs/Projectile"));
+
+        RequireSingletonForUpdate<GameReadyEvent>();
     }
 
     protected override void OnUpdate()
