@@ -19,7 +19,7 @@
                 },
                 {
                     "Scene": "GlobalObjectId_V1-1-f3a5c78d7d93814e59773dda8008a55b-102900000-0",
-                    "AutoLoad": true
+                    "AutoLoad": false
                 }
             ]
         },
