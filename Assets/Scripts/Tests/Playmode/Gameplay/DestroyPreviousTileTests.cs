@@ -2,11 +2,14 @@ using NUnit.Framework;
 using Unity.Entities;
 using Unity.Transforms;
 using Unity.Mathematics;
-using Unity.Scenes;
-using Unity.Collections;
 
 public class DestroyPreviousTileTests : ECSTestsFixture
 {
+    public DestroyPreviousTileTests()
+    {
+        CreateDefaultWorld = false;
+    }
+
     [Test]
     public void DestroyPreviousTileTest()
     {
@@ -24,9 +27,9 @@ public class DestroyPreviousTileTests : ECSTestsFixture
         // Entity Prefab = PrefabConverter.Convert(Resources.Load<GameObject>("Prefabs/Level/Test/Straight"), m_World);
         // m_World.Update();
 
-        SceneSystem SceneSys = m_World.CreateSystem<SceneSystem>();
-        Hash128 PrefabHash = SceneSys.GetSceneGUID("Assets/Scenes/Scene/Straight.unity");
-        Entity LoadingEntity = SceneSys.LoadSceneAsync(PrefabHash, new SceneSystem.LoadParameters() { AutoLoad = true });
+        // SceneSystem SceneSys = m_World.CreateSystem<SceneSystem>();
+        // Hash128 PrefabHash = SceneSys.GetSceneGUID("Assets/Scenes/Scene/Straight.unity");
+        // Entity LoadingEntity = SceneSys.LoadSceneAsync(PrefabHash, new SceneSystem.LoadParameters() { AutoLoad = true });
 
         // int loop = 0;
 
@@ -40,7 +43,7 @@ public class DestroyPreviousTileTests : ECSTestsFixture
         //     SectionEntities.Dispose();
         // }
 
-        Entity Prefab = default;
+        Entity Prefab = PrefabConverter.Convert(UnityEngine.Resources.Load<UnityEngine.GameObject>("Prefabs/Level/Test/Straight"), m_World);
         Entity FirstTile = m_Manager.Instantiate(Prefab);
         Entity SecondTile = m_Manager.Instantiate(Prefab);
 
@@ -62,13 +65,13 @@ public class DestroyPreviousTileTests : ECSTestsFixture
         m_Manager.SetComponentData(SecondTile, SecondTileTrans);
 
         // Update our system to register the player's position
-        System.Update();
+        m_World.Update();
 
         // Move the player to the second tile
         m_Manager.SetComponentData(Player, SecondTileTrans);
 
         // Update our system to act on the player's new position
-        System.Update();
+        m_World.Update();
 
         // Assert the first tile has been setup to animate
         EntityQuery ShaderComponents = m_Manager.CreateEntityQuery(typeof(DissolveShaderData));

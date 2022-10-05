@@ -62,6 +62,9 @@ public class MainMenu : MonoBehaviour
         {
             newGameSeed = newGameSeedField.text;
 
+            Unity.Entities.World.DisposeAllWorlds();
+            Unity.Entities.DefaultWorldInitialization.Initialize("Default World");
+
             UnityEngine.SceneManagement.SceneManager.LoadScene(1);
         });
     }

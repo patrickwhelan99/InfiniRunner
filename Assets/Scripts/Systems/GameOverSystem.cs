@@ -1,5 +1,4 @@
 using Unity.Entities;
-using Unity.Scenes;
 
 public partial class GameOverSystem : SystemBase
 {
@@ -11,15 +10,31 @@ public partial class GameOverSystem : SystemBase
     }
     protected override void OnUpdate()
     {
-        GameOverReason Reason = GameOverReason.NONE;
+        // EntityQueryDesc DestructionQueryDesc = new EntityQueryDesc()
+        // {
+        //     Any = new ComponentType[] { typeof(PlayerTag), typeof(EnemyTag), typeof(LevelTileTag), typeof(GameOverEvent) }
+        // };
 
-        EntityCommandBuffer Ecb = Ecbs.CreateCommandBuffer();
-        Entities.WithAll<GameOverEvent>().ForEach((Entity E, in GameOverEvent Event) =>
-        {
-            Reason = Event.Value;
-            Ecb.DestroyEntity(E);
-        }).Run();
-        
+        // EntityQuery DestructionQuery = EntityManager.CreateEntityQuery(DestructionQueryDesc);
+
+        // Dependency = new DestroyEntitiesJob()
+        // {
+        //     Writer = Ecbs.CreateCommandBuffer().AsParallelWriter()
+        // }.ScheduleParallel(DestructionQuery);
+
+        // Ecbs.AddJobHandleForProducer(Dependency);
+
+        World.DisposeAllWorlds();
+
         GameManager.Instance.GameOver();
+    }
+
+    private partial struct DestroyEntitiesJob : IJobEntity
+    {
+        public EntityCommandBuffer.ParallelWriter Writer;
+        public void Execute(Entity E)
+        {
+            Writer.DestroyEntity(0, E);
+        }
     }
 }

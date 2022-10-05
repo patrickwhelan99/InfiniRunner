@@ -5,8 +5,8 @@ public partial class ScoringSystem : SystemBase
 {
     private EntityCommandBufferSystem Ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
 
-    private static int _score;
-    public static int Score
+    private int _score;
+    public int Score
     {
         get => _score;
 

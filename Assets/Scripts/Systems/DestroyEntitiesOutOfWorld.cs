@@ -9,6 +9,11 @@ public partial class DestroyEntitiesOutOfWorld : SystemBase
     private const float MIN_WORLD_HEIGHT = -250.0f;
     private EntityCommandBufferSystem Ecbs => World.GetOrCreateSystem<EntityCommandBufferSystem>();
 
+    protected override void OnStartRunning()
+    {
+        RequireSingletonForUpdate<GameReadyEvent>();
+    }
+
     protected override void OnUpdate()
     {
         EntityCommandBuffer.ParallelWriter Writer = Ecbs.CreateCommandBuffer().AsParallelWriter();

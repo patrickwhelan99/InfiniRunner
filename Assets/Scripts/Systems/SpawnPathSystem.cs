@@ -188,6 +188,12 @@ public partial class SpawnPathSystem : SystemBase
                 Path = Path,
                 Offset = Event.SpawnOffset
             }.Schedule(PlayerQuery, Dependency);
+
+            Dependency = Job.WithCode(() =>
+            {
+                Entity E = Writer.CreateEntity(0);
+                Writer.AddComponent<GameReadyEvent>(0, E);
+            }).Schedule(Dependency);
         }
 
 
