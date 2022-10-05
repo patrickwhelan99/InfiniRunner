@@ -2,6 +2,7 @@ using Unity.Collections;
 using Unity.Entities;
 using Unity.Scenes;
 
+[DisableAutoCreation]
 public partial class LoadSubSceneSystem : SystemBase
 {
     private SceneSystem SceneSys;

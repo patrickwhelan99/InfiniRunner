@@ -7,7 +7,7 @@ using Unity.Transforms;
 using Unity.Physics;
 using Unity.Physics.Systems;
 
-
+[AlwaysUpdateSystem]
 public partial class ProjectileSystem : SystemBase
 {
     // Physics stuff
